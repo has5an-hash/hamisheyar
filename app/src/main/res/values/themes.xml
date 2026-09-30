@@ -1,15 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Hamisheyar" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.Hamisheyar" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 
     <style name="Theme.Hamisheyar.Transparent" parent="@android:style/Theme.Translucent.NoTitleBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:colorAccent">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>
