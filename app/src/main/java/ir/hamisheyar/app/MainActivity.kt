@@ -100,6 +100,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ir.hamisheyar.app.ai.LocalAiEngine
+import ir.hamisheyar.app.ai.ModelDownloadManager
 import ir.hamisheyar.app.data.ChatMessage
 import ir.hamisheyar.app.data.InboxEvent
 import ir.hamisheyar.app.data.LocalStore
@@ -620,8 +621,23 @@ private fun SettingsScreen() {
     var modelPath by remember { mutableStateOf(AppSettings.modelPath(context)) }
     var importing by remember { mutableStateOf(false) }
     var importMessage by remember { mutableStateOf<String?>(null) }
+    var modelDownloadState by remember { mutableStateOf(ModelDownloadManager.inspect(context)) }
     var privacyDialog by remember { mutableStateOf(false) }
     var clearDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val previousPath = modelPath
+            val state = withContext(Dispatchers.IO) { ModelDownloadManager.inspect(context) }
+            modelDownloadState = state
+            if (!state.completedPath.isNullOrBlank() && state.completedPath != previousPath) {
+                LocalAiEngine.reset()
+                modelPath = state.completedPath
+                importMessage = "مدل دانلود شد و آماده استفاده است."
+            }
+            delay(if (state.active) 1_000L else 3_000L)
+        }
+    }
 
     val modelPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -683,11 +699,73 @@ private fun SettingsScreen() {
                     Text("در حال کپی مدل؛ برنامه را نبند…", style = MaterialTheme.typography.labelSmall)
                 } else {
                     Spacer(Modifier.height(12.dp))
-                    Button(
+
+                    if (modelDownloadState.active) {
+                        Text(modelDownloadState.message, style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(6.dp))
+                        if (modelDownloadState.progress > 0f) {
+                            LinearProgressIndicator(
+                                progress = { modelDownloadState.progress },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                ModelDownloadManager.cancel(context)
+                                modelDownloadState = ModelDownloadManager.inspect(context)
+                                importMessage = "دانلود لغو شد."
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("لغو دانلود")
+                        }
+                    } else {
+                        FilledTonalButton(
+                            onClick = {
+                                runCatching {
+                                    ModelDownloadManager.start(context, ModelDownloadManager.FAST)
+                                    modelDownloadState = ModelDownloadManager.inspect(context)
+                                    importMessage = "دانلود مدل سبک شروع شد؛ از نوار اعلان هم می‌تونی وضعیتش را ببینی."
+                                }.onFailure {
+                                    importMessage = "شروع دانلود ممکن نشد: " + (it.message ?: "خطا")
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("دانلود مدل سبک • ۴۲۹ MB", fontWeight = FontWeight.Bold)
+                                Text("برای گوشی‌های ضعیف‌تر و تست سریع", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        FilledTonalButton(
+                            onClick = {
+                                runCatching {
+                                    ModelDownloadManager.start(context, ModelDownloadManager.BALANCED)
+                                    modelDownloadState = ModelDownloadManager.inspect(context)
+                                    importMessage = "دانلود مدل پیشنهادی شروع شد؛ ممکنه کمی زمان ببره."
+                                }.onFailure {
+                                    importMessage = "شروع دانلود ممکن نشد: " + (it.message ?: "خطا")
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("دانلود مدل پیشنهادی • ۱.۲۸ GB", fontWeight = FontWeight.Bold)
+                                Text("کیفیت بهتر برای گوشی‌های قوی‌تر", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
                         onClick = { modelPicker.launch(arrayOf("*/*")) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (modelFile == null) "انتخاب فایل GGUF" else "تعویض مدل")
+                        Text(if (modelFile == null) "یا انتخاب فایل GGUF از گوشی" else "تعویض مدل با فایل GGUF")
                     }
                 }
                 importMessage?.let {
