@@ -9,6 +9,17 @@ object AppSettings {
     fun modelPath(context: Context): String? = prefs(context).getString("model_path", null)
     fun setModelPath(context: Context, value: String?) = prefs(context).edit().putString("model_path", value).apply()
 
+    fun modelDownloadId(context: Context): Long = prefs(context).getLong("model_download_id", -1L)
+    fun modelDownloadFile(context: Context): String? = prefs(context).getString("model_download_file", null)
+    fun setModelDownload(context: Context, id: Long, fileName: String) = prefs(context).edit()
+        .putLong("model_download_id", id)
+        .putString("model_download_file", fileName)
+        .apply()
+    fun clearModelDownload(context: Context) = prefs(context).edit()
+        .remove("model_download_id")
+        .remove("model_download_file")
+        .apply()
+
     fun announcementEnabled(context: Context) = prefs(context).getBoolean("announce", false)
     fun setAnnouncementEnabled(context: Context, value: Boolean) = prefs(context).edit().putBoolean("announce", value).apply()
 
