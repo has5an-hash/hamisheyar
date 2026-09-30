@@ -1,0 +1,2 @@
+-keep class dev.ffmpegkit.llama.** { *; }
+-dontwarn org.jsoup.**
