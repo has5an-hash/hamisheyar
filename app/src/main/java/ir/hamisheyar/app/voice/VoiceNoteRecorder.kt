@@ -5,6 +5,7 @@ import android.media.MediaRecorder
 import android.os.Build
 import java.io.File
 
+@Suppress("DEPRECATION")
 class VoiceNoteRecorder(private val context: Context) {
     private var recorder: MediaRecorder? = null
     private var output: File? = null
@@ -15,12 +16,7 @@ class VoiceNoteRecorder(private val context: Context) {
         check(recorder == null) { "Recording already active" }
         val dir = File(context.cacheDir, "voice").apply { mkdirs() }
         val file = File(dir, "voice_" + System.currentTimeMillis() + ".m4a")
-        val mediaRecorder = if (Build.VERSION.SDK_INT >= 31) {
-            MediaRecorder(context)
-        } else {
-            @Suppress("DEPRECATION")
-            MediaRecorder()
-        }
+        val mediaRecorder = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else MediaRecorder()
         mediaRecorder.apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)

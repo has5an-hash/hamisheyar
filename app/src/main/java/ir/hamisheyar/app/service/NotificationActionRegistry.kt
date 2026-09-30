@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
 
@@ -23,9 +22,7 @@ object NotificationActionRegistry {
         val reply = actions.firstOrNull { !it.remoteInputs.isNullOrEmpty() }
         val play = actions.firstOrNull { action ->
             val title = action.title?.toString()?.lowercase().orEmpty()
-            val semanticPlay = Build.VERSION.SDK_INT >= 28 &&
-                action.semanticAction == Notification.Action.SEMANTIC_ACTION_PLAY
-            semanticPlay || title.contains("play") || title.contains("پخش")
+            title.contains("play") || title.contains("پخش")
         }
         latest = Target(sbn.key, sbn.packageName, reply, play)
     }
