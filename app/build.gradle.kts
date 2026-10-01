@@ -77,6 +77,9 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     implementation("dev.ffmpegkit-maintained:llama-android:0.1.1")
+    implementation("dev.ffmpegkit-maintained:whisper-android:1.0.0")
+    implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.8")
+    implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jsoup:jsoup:1.18.3")
 
