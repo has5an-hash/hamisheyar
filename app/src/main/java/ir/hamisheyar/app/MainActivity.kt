@@ -155,6 +155,13 @@ class MainActivity : ComponentActivity() {
         openVoice.value = intent.getBooleanExtra(EXTRA_OPEN_VOICE, false)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (AccessManager.isNotificationAccessGranted(this)) {
+            AccessManager.requestNotificationListenerReconnect(this)
+        }
+    }
+
     companion object {
         const val EXTRA_INCOMING_SHARE = "incoming_share"
         const val EXTRA_OPEN_VOICE = "open_voice"
@@ -434,7 +441,7 @@ private fun NotificationAccessCard(
                     Text(
                         when {
                             granted && connected -> "دسترسی فعال است و سرویس همیشه‌یار واقعاً به اعلان‌ها وصل شده."
-                            granted -> "دسترسی داده شده، ولی اتصال سرویس هنوز تأیید نشده."
+                            granted -> "دسترسی فعال است؛ همیشه‌یار در حال اتصال مجدد سرویس اعلان‌هاست."
                             likelySideloaded && Build.VERSION.SDK_INT >= 33 ->
                                 "Android نصب مستقیم APK را تشخیص داده و ممکن است این دسترسی را با Restricted settings قفل کرده باشد."
                             else -> "برای فهمیدن پیام‌ها و پاسخ سریع، Notification Access را فعال کن."
@@ -444,9 +451,9 @@ private fun NotificationAccessCard(
                     )
                 }
                 Icon(
-                    if (granted && connected) Icons.Rounded.CheckCircle else Icons.Rounded.Warning,
+                    if (granted) Icons.Rounded.CheckCircle else Icons.Rounded.Warning,
                     null,
-                    tint = if (granted && connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
             }
 
