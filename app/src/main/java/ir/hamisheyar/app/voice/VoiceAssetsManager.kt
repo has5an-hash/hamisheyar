@@ -34,11 +34,14 @@ object VoiceAssetsManager {
     private const val TTS_URL =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fa_IR-ganji-medium-int8.tar.bz2"
 
+    private fun voiceBase(context: Context): File =
+        File(context.getExternalFilesDir(null) ?: context.filesDir, "voice").apply { mkdirs() }
+
     fun sttFile(context: Context): File =
-        File(File(context.getExternalFilesDir(null), "voice").apply { mkdirs() }, STT_FILE)
+        File(voiceBase(context), STT_FILE)
 
     fun ttsRoot(context: Context): File =
-        File(File(context.getExternalFilesDir(null), "voice").apply { mkdirs() }, "persian-tts")
+        File(voiceBase(context), "persian-tts")
 
     fun ttsModelFile(context: Context): File? =
         ttsRoot(context).walkTopDown()
@@ -62,9 +65,10 @@ object VoiceAssetsManager {
 
     fun startInstall(context: Context) {
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val voiceDir = File(context.getExternalFilesDir(null), "voice").apply { mkdirs() }
+        val voiceDir = voiceBase(context)
 
         if (!isSttReady(context) && AppSettings.voiceWhisperDownloadId(context) <= 0L) {
+            sttFile(context).delete()
             val request = DownloadManager.Request(Uri.parse(STT_URL))
                 .setTitle("همیشه‌یار — تشخیص گفتار فارسی")
                 .setDescription("دانلود موتور گفتار آفلاین")
@@ -128,7 +132,7 @@ object VoiceAssetsManager {
             downloading = downloading || state.active
             when {
                 state.success -> {
-                    val archive = File(File(context.getExternalFilesDir(null), "voice"), TTS_ARCHIVE)
+                    val archive = File(voiceBase(context), TTS_ARCHIVE)
                     if (!isTtsReady(context)) {
                         message = "در حال آماده‌سازی صدای فارسی…"
                         runCatching {
@@ -186,7 +190,7 @@ object VoiceAssetsManager {
             AppSettings.voiceTtsDownloadId(context)
         ).filter { it > 0L }.forEach { runCatching { manager.remove(it) } }
 
-        File(context.getExternalFilesDir(null), "voice").deleteRecursively()
+        voiceBase(context).deleteRecursively()
         AppSettings.clearVoiceWhisperDownload(context)
         AppSettings.clearVoiceTtsDownload(context)
         AppSettings.setVoiceWhisperPath(context, null)
