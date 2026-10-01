@@ -47,13 +47,23 @@ object LocalAiEngine {
         val fileSizeMb = if (configured) file!!.length() / (1024L * 1024L) else 0L
         val availableRamMb = availableRamMb(context)
 
+        val legacySlowQuant = file?.name
+            ?.lowercase()
+            ?.let { name ->
+                name.contains("qwen2.5") &&
+                    name.contains("q4_0") &&
+                    !name.contains("q4_0_4_4")
+            } == true
+
         val warning = when {
             !configured -> "مدل محلی هنوز انتخاب نشده است."
             !valid -> "فایل انتخاب‌شده GGUF سالم نیست یا دانلود ناقص مانده است."
+            legacySlowQuant ->
+                "این مدل از Quant قدیمی استفاده می‌کند. برای سرعت بهتر، مدل «سریع مخصوص ARM» را نصب کن."
             fileSizeMb > 900 && availableRamMb < 2200 ->
-                "مدل برای RAM آزاد فعلی سنگین است؛ مدل سبک را انتخاب کن."
+                "مدل برای RAM آزاد فعلی سنگین است؛ مدل سریع مخصوص ARM را انتخاب کن."
             fileSizeMb > 450 && availableRamMb < 1200 ->
-                "RAM آزاد گوشی کم است و مدل ممکن است بسیار کند یا ناپایدار شود."
+                "RAM آزاد گوشی کم است و مدل ممکن است کند شود؛ مدل سریع مخصوص ARM پیشنهاد می‌شود."
             else -> null
         }
 
