@@ -254,6 +254,11 @@ object OfflineVoiceEngine {
         }
     }
 
+    fun cancelRecording(context: Context) {
+        val wav = stopRecording(context)
+        wav?.delete()
+    }
+
     fun stopSpeaking() {
         val track = currentTrack
         currentTrack = null
