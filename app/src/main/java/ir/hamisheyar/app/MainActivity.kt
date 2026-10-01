@@ -2,6 +2,8 @@ package ir.hamisheyar.app
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -10,6 +12,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -104,8 +107,10 @@ import ir.hamisheyar.app.ai.ModelDownloadManager
 import ir.hamisheyar.app.data.ChatMessage
 import ir.hamisheyar.app.data.InboxEvent
 import ir.hamisheyar.app.data.LocalStore
+import ir.hamisheyar.app.diagnostics.DiagnosticsLogger
 import ir.hamisheyar.app.service.FloatingAssistantService
 import ir.hamisheyar.app.settings.AppSettings
+import ir.hamisheyar.app.system.AccessManager
 import ir.hamisheyar.app.ui.HamisheyarTheme
 import ir.hamisheyar.app.web.SearchHit
 import ir.hamisheyar.app.web.WebResearchService
@@ -219,9 +224,10 @@ private fun HomeScreen(onOpenChat: () -> Unit) {
     }
 
     val canOverlay = remember(tick) { Settings.canDrawOverlays(context) }
-    val notificationAccess = remember(tick) {
-        NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+    val notificationState = remember(tick) {
+        AccessManager.notificationAccessState(context)
     }
+    val notificationAccess = notificationState.granted
     val micGranted = remember(tick) {
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     }
@@ -276,14 +282,20 @@ private fun HomeScreen(onOpenChat: () -> Unit) {
         }
 
         item {
-            StatusCard(
-                icon = Icons.Rounded.Notifications,
-                title = "دسترسی اعلان‌ها",
-                description = if (notificationAccess) "پیام‌های مجاز واتس‌اپ، تلگرام، اینستاگرام و SMS قابل تشخیص‌اند." else "برای فهمیدن پیام‌ها و پاسخ سریع فعالش کن.",
-                ready = notificationAccess,
-                button = if (!notificationAccess) "فعال‌سازی" else null,
-                onButton = {
-                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            NotificationAccessCard(
+                granted = notificationAccess,
+                connected = notificationState.serviceConnectedRecently,
+                likelySideloaded = notificationState.likelySideloaded,
+                installerPackage = notificationState.installerPackage,
+                onOpenAppInfo = {
+                    AccessManager.openAppInfoForRestrictedSettings(context)
+                },
+                onOpenAccess = {
+                    AccessManager.openNotificationAccess(context)
+                },
+                onReconnect = {
+                    AccessManager.requestNotificationListenerReconnect(context)
+                    tick++
                 }
             )
         }
@@ -380,6 +392,100 @@ private fun StatusCard(
 }
 
 @Composable
+private fun NotificationAccessCard(
+    granted: Boolean,
+    connected: Boolean,
+    likelySideloaded: Boolean,
+    installerPackage: String?,
+    onOpenAppInfo: () -> Unit,
+    onOpenAccess: () -> Unit,
+    onReconnect: () -> Unit
+) {
+    Card(shape = RoundedCornerShape(22.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Rounded.Notifications,
+                    null,
+                    tint = if (granted && connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("دسترسی اعلان‌ها", fontWeight = FontWeight.Bold)
+                    Text(
+                        when {
+                            granted && connected -> "دسترسی فعال است و سرویس همیشه‌یار واقعاً به اعلان‌ها وصل شده."
+                            granted -> "دسترسی داده شده، ولی اتصال سرویس هنوز تأیید نشده."
+                            likelySideloaded && Build.VERSION.SDK_INT >= 33 ->
+                                "Android نصب مستقیم APK را تشخیص داده و ممکن است این دسترسی را با Restricted settings قفل کرده باشد."
+                            else -> "برای فهمیدن پیام‌ها و پاسخ سریع، Notification Access را فعال کن."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    if (granted && connected) Icons.Rounded.CheckCircle else Icons.Rounded.Warning,
+                    null,
+                    tint = if (granted && connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
+            }
+
+            if (!granted) {
+                Spacer(Modifier.height(12.dp))
+                if (likelySideloaded && Build.VERSION.SDK_INT >= 33) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text("رفع قفل امنیتی اندروید", fontWeight = FontWeight.Bold)
+                            Text(
+                                "۱) «اطلاعات برنامه» را باز کن.\n" +
+                                    "۲) بالای صفحه سه‌نقطه را بزن.\n" +
+                                    "۳) «Allow restricted settings / اجازه تنظیمات محدودشده» را تأیید کن.\n" +
+                                    "۴) برگرد و «فعال‌کردن دسترسی اعلان‌ها» را بزن.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            if (!installerPackage.isNullOrBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Installer: $installerPackage",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = onOpenAppInfo,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("۱. باز کردن اطلاعات برنامه")
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = onOpenAccess,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (likelySideloaded && Build.VERSION.SDK_INT >= 33) "۲. فعال‌کردن دسترسی اعلان‌ها" else "فعال‌کردن دسترسی اعلان‌ها")
+                }
+            } else if (!connected) {
+                Spacer(Modifier.height(10.dp))
+                FilledTonalButton(
+                    onClick = onReconnect,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("بازاتصال سرویس اعلان")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ChatScreen(incomingShare: String?) {
     val context = LocalContext.current
     val store = remember { LocalStore(context) }
@@ -389,6 +495,7 @@ private fun ChatScreen(incomingShare: String?) {
     }
     var input by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var generationStatus by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
 
     LaunchedEffect(incomingShare) {
@@ -427,36 +534,70 @@ private fun ChatScreen(incomingShare: String?) {
         val id = store.addMessage("user", prompt)
         messages += ChatMessage(id, "user", prompt, System.currentTimeMillis())
         busy = true
+        generationStatus = "در حال آماده‌سازی…"
 
         scope.launch {
-            var hits: List<SearchHit> = emptyList()
-            val webContext = if (AppSettings.webResearchEnabled(context)) {
-                hits = runCatching { WebResearchService.search(prompt) }.getOrDefault(emptyList())
-                if (hits.isEmpty()) "" else "نتایج جست‌وجوی تازه وب:\n" + WebResearchService.asContext(hits)
-            } else ""
+            try {
+                var hits: List<SearchHit> = emptyList()
+                val webContext = if (AppSettings.webResearchEnabled(context)) {
+                    generationStatus = "دارم اطلاعات به‌روز وب را می‌گیرم…"
+                    hits = runCatching { WebResearchService.search(prompt) }.getOrDefault(emptyList())
+                    if (hits.isEmpty()) "" else "نتایج جست‌وجوی تازه وب:\n" + WebResearchService.asContext(hits)
+                } else ""
 
-            val answerText = if (!LocalAiEngine.isConfigured(context)) {
-                "مدل محلی هنوز وارد نشده. از تب تنظیمات یک فایل GGUF انتخاب کن؛ بعد گفتگو کاملاً روی خود گوشی اجرا می‌شود."
-            } else {
-                runCatching {
-                    LocalAiEngine.answer(context, prompt, webContext).text
-                }.getOrElse {
-                    "اجرای مدل محلی انجام نشد: " + (it.message ?: "خطای نامشخص")
+                val answerText = if (!LocalAiEngine.isConfigured(context)) {
+                    val health = LocalAiEngine.health(context)
+                    health.warning ?: "مدل محلی هنوز آماده نیست. از تنظیمات مدل را دانلود و تست کن."
+                } else {
+                    runCatching {
+                        LocalAiEngine.answer(
+                            context = context,
+                            prompt = prompt,
+                            extraContext = webContext,
+                            onStage = { generationStatus = it }
+                        ).text
+                    }.getOrElse {
+                        DiagnosticsLogger.log(context, "CHAT", "chat generation failed", it)
+                        "اجرای مدل محلی انجام نشد: " + (it.message ?: "خطای نامشخص") +
+                            "\n\nاز تنظیمات روی «تست مدل» بزن تا علت دقیق مشخص شود."
+                    }
                 }
-            }
 
-            val sources = if (hits.isNotEmpty()) {
-                "\n\nمنابع وب:\n" + hits.joinToString("\n") { "• " + it.title + " — " + it.url }
-            } else ""
-            val finalText = answerText + sources
-            val answerId = store.addMessage("assistant", finalText)
-            messages += ChatMessage(answerId, "assistant", finalText, System.currentTimeMillis())
-            busy = false
+                val sources = if (hits.isNotEmpty()) {
+                    "\n\nمنابع وب:\n" + hits.joinToString("\n") { "• " + it.title + " — " + it.url }
+                } else ""
+                val finalText = answerText.ifBlank {
+                    "مدل پاسخ خالی داد. از تنظیمات «تست مدل» را اجرا کن."
+                } + sources
+                val answerId = store.addMessage("assistant", finalText)
+                messages += ChatMessage(answerId, "assistant", finalText, System.currentTimeMillis())
+            } catch (t: Throwable) {
+                DiagnosticsLogger.log(context, "CHAT", "unexpected chat failure", t)
+                val text = "خطای غیرمنتظره در چت: " + (t.message ?: "خطای نامشخص")
+                val answerId = store.addMessage("assistant", text)
+                messages += ChatMessage(answerId, "assistant", text, System.currentTimeMillis())
+            } finally {
+                busy = false
+                generationStatus = null
+            }
         }
     }
 
     Column(Modifier.fillMaxSize()) {
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (busy) {
+            Column(Modifier.fillMaxWidth()) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                generationStatus?.let {
+                    Text(
+                        it,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
 
         if (messages.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -622,6 +763,8 @@ private fun SettingsScreen() {
     var importing by remember { mutableStateOf(false) }
     var importMessage by remember { mutableStateOf<String?>(null) }
     var modelDownloadState by remember { mutableStateOf(ModelDownloadManager.inspect(context)) }
+    var modelTestRunning by remember { mutableStateOf(false) }
+    var modelTestResult by remember { mutableStateOf<String?>(null) }
     var privacyDialog by remember { mutableStateOf(false) }
     var clearDialog by remember { mutableStateOf(false) }
 
@@ -736,8 +879,8 @@ private fun SettingsScreen() {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("دانلود مدل سبک • ۴۲۹ MB", fontWeight = FontWeight.Bold)
-                                Text("برای گوشی‌های ضعیف‌تر و تست سریع", style = MaterialTheme.typography.labelSmall)
+                                Text("دانلود مدل سبک و پایدار • ۴۲۹ MB", fontWeight = FontWeight.Bold)
+                                Text("Qwen2.5 0.5B • مناسب شروع و تست سریع", style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -754,8 +897,8 @@ private fun SettingsScreen() {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("دانلود مدل پیشنهادی • ۱.۲۸ GB", fontWeight = FontWeight.Bold)
-                                Text("کیفیت بهتر برای گوشی‌های قوی‌تر", style = MaterialTheme.typography.labelSmall)
+                                Text("دانلود مدل قوی‌تر • ۱.۱۲ GB", fontWeight = FontWeight.Bold)
+                                Text("Qwen2.5 1.5B • برای گوشی‌های با RAM بیشتر", style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -772,8 +915,79 @@ private fun SettingsScreen() {
                     Spacer(Modifier.height(8.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall)
                 }
+
+                if (modelFile != null) {
+                    val health = LocalAiEngine.health(context)
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        color = if (health.warning == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                            Text(
+                                if (health.warning == null) "بررسی اولیه مدل: سالم" else "هشدار مدل",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Text(
+                                health.warning ?: "GGUF معتبر است • RAM آزاد فعلی: ${health.availableRamMb} MB",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            if (modelFile.name.contains("qwen3", ignoreCase = true)) {
+                                Text(
+                                    "حالت سازگاری Qwen3 فعال است؛ Thinking به‌صورت خودکار خاموش می‌شود.",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            modelTestRunning = true
+                            modelTestResult = "در حال شروع تست…"
+                            scope.launch {
+                                runCatching {
+                                    LocalAiEngine.selfTest(context) { modelTestResult = it }
+                                }.onSuccess { result ->
+                                    modelTestResult =
+                                        "✅ مدل جواب داد: ${result.text}\n" +
+                                            "سرعت: " + String.format(Locale.US, "%.1f", result.tokensPerSecond) +
+                                            " token/s • زمان: ${result.durationMs / 1000.0} ثانیه"
+                                }.onFailure {
+                                    modelTestResult = "❌ تست ناموفق: " + (it.message ?: "خطای نامشخص")
+                                }
+                                modelTestRunning = false
+                            }
+                        },
+                        enabled = !modelTestRunning && !importing && !modelDownloadState.active,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (modelTestRunning) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(if (modelTestRunning) "در حال تست واقعی مدل…" else "تست واقعی مدل روی همین گوشی")
+                    }
+                    modelTestResult?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         }
+
+        Text("دسترسی‌های سیستمی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        val accessState = AccessManager.notificationAccessState(context)
+        NotificationAccessCard(
+            granted = accessState.granted,
+            connected = accessState.serviceConnectedRecently,
+            likelySideloaded = accessState.likelySideloaded,
+            installerPackage = accessState.installerPackage,
+            onOpenAppInfo = { AccessManager.openAppInfoForRestrictedSettings(context) },
+            onOpenAccess = { AccessManager.openNotificationAccess(context) },
+            onReconnect = { AccessManager.requestNotificationListenerReconnect(context) }
+        )
 
         Text("رفتار دستیار", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         SettingsSwitch(
@@ -858,6 +1072,29 @@ private fun SettingsScreen() {
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+        }
+        OutlinedButton(
+            onClick = {
+                val report = buildString {
+                    appendLine("Hamisheyar diagnostics")
+                    appendLine("Android: " + Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT)
+                    appendLine("Device: " + Build.MANUFACTURER + " " + Build.MODEL)
+                    val health = LocalAiEngine.health(context)
+                    appendLine("Model: " + (health.modelName ?: "none"))
+                    appendLine("Model valid: " + health.validGguf)
+                    appendLine("Model size MB: " + health.fileSizeMb)
+                    appendLine("Available RAM MB: " + health.availableRamMb)
+                    appendLine("Notification granted: " + AccessManager.notificationAccessState(context).granted)
+                    appendLine()
+                    append(DiagnosticsLogger.read(context))
+                }
+                val clipboard = context.getSystemService(ClipboardManager::class.java)
+                clipboard.setPrimaryClip(ClipData.newPlainText("Hamisheyar diagnostics", report))
+                Toast.makeText(context, "گزارش فنی کپی شد.", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("کپی گزارش فنی برای عیب‌یابی")
         }
         Spacer(Modifier.height(20.dp))
     }
