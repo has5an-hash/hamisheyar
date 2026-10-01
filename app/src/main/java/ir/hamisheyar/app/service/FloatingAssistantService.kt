@@ -28,8 +28,6 @@ import ir.hamisheyar.app.MainActivity
 import ir.hamisheyar.app.R
 import ir.hamisheyar.app.assistant.AssistantAction
 import ir.hamisheyar.app.assistant.AssistantController
-import ir.hamisheyar.app.voice.OfflineVoiceEngine
-import ir.hamisheyar.app.voice.VoiceAssetsManager
 import ir.hamisheyar.app.voice.VoiceNoteRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -269,41 +267,15 @@ class FloatingAssistantService : Service() {
     }
 
     private fun startVoiceCommand() {
-        if (!VoiceAssetsManager.isSttReady(this)) {
-            runCatching { VoiceAssetsManager.startInstall(this) }
-            panelStatus?.text = "بسته ویس آفلاین در حال آماده‌شدن است. از داخل برنامه، تب «ویس» وضعیت دانلود را ببین."
-            return
+        val intent = Intent(this, MainActivity::class.java).apply {
+            putExtra(MainActivity.EXTRA_OPEN_VOICE, true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            panelStatus?.text = "اجازه میکروفون لازم است؛ از داخل همیشه‌یار فعالش کن."
-            return
-        }
-
-        if (!OfflineVoiceEngine.isRecording()) {
-            runCatching {
-                OfflineVoiceEngine.startRecording(this)
-                voiceButton?.text = "⏹ پایان"
-                panelStatus?.text = "گوش می‌دم… وقتی حرفت تموم شد «پایان» رو بزن."
-            }.onFailure {
-                panelStatus?.text = it.message ?: "میکروفون شروع نشد."
-            }
-            return
-        }
-
-        voiceButton?.text = "🎙 صحبت"
-        panelStatus?.text = "دارم صدات رو روی خود گوشی تبدیل می‌کنم…"
-        scope.launch {
-            runCatching {
-                OfflineVoiceEngine.stopAndTranscribe(this@FloatingAssistantService) {
-                    panelStatus?.text = it
-                }
-            }.onSuccess { transcript ->
-                panelStatus?.text = "شنیدم: " + transcript.text
-                handleCommand(transcript.text, speakAnswer = true)
-            }.onFailure {
-                panelStatus?.text = it.message ?: "تشخیص گفتار انجام نشد."
-            }
+        runCatching {
+            startActivity(intent)
+            panelStatus?.text = "حالت ویس مستقل همیشه‌یار باز شد."
+        }.onFailure {
+            panelStatus?.text = "نتونستم حالت ویس رو باز کنم."
         }
     }
 
@@ -313,16 +285,8 @@ class FloatingAssistantService : Service() {
             val result = AssistantController.handle(this@FloatingAssistantService, value)
             panelStatus?.text = result.text
 
-            if (speakAnswer && VoiceAssetsManager.isTtsReady(this@FloatingAssistantService)) {
-                runCatching {
-                    OfflineVoiceEngine.speakPersian(
-                        this@FloatingAssistantService,
-                        result.text,
-                        speed = 1.04f
-                    ) { stage -> panelStatus?.text = stage }
-                }.onFailure {
-                    panelStatus?.text = result.text
-                }
+            if (speakAnswer) {
+                panelStatus?.text = result.text
             }
 
             when (result.action) {
@@ -385,10 +349,6 @@ class FloatingAssistantService : Service() {
 
     override fun onDestroy() {
         recorder.cancel()
-        if (OfflineVoiceEngine.isRecording()) {
-            OfflineVoiceEngine.cancelRecording(this)
-        }
-        OfflineVoiceEngine.stopSpeaking()
         scope.cancel()
         removePanel()
         bubble?.let { runCatching { windowManager.removeView(it) } }
