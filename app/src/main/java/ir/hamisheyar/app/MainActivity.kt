@@ -107,6 +107,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import ir.hamisheyar.app.ai.LocalAiEngine
 import ir.hamisheyar.app.ai.FastReplyEngine
 import ir.hamisheyar.app.ai.ModelDownloadManager
+import ir.hamisheyar.app.ai.SafeAiClient
 import ir.hamisheyar.app.data.ChatMessage
 import ir.hamisheyar.app.data.InboxEvent
 import ir.hamisheyar.app.data.LocalStore
@@ -614,7 +615,7 @@ private fun ChatScreen(incomingShare: String?) {
                     }
                     else -> {
                         runCatching {
-                            LocalAiEngine.answer(
+                            SafeAiClient.answer(
                                 context = context,
                                 prompt = prompt,
                                 extraContext = webContext,
@@ -1072,7 +1073,7 @@ private fun SettingsScreen() {
                             modelTestResult = "در حال شروع تست…"
                             scope.launch {
                                 runCatching {
-                                    LocalAiEngine.selfTest(context) { modelTestResult = it }
+                                    SafeAiClient.selfTest(context) { modelTestResult = it }
                                 }.onSuccess { result ->
                                     modelTestResult =
                                         "✅ مدل جواب داد: ${result.text}\n" +
