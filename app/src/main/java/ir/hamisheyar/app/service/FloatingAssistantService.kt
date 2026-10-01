@@ -206,9 +206,7 @@ class FloatingAssistantService : Service() {
         }
         val record = Button(this).apply {
             text = "🎤 ویس"
-            setOnClickListener {
-                if (recorder.isRecording) stopVoiceNoteAndShare() else startVoiceNote()
-            }
+            setOnClickListener { startVoiceNote() }
         }
         val close = Button(this).apply {
             text = "×"
