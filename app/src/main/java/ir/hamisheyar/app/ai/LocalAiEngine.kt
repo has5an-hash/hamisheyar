@@ -36,7 +36,7 @@ object LocalAiEngine {
     fun isConfigured(context: Context): Boolean {
         val path = AppSettings.modelPath(context) ?: return false
         val file = File(path)
-        return file.isFile && isValidGguf(file)
+        return file.isFile && isValidGguf(file) && isRuntimeCompatible(file)
     }
 
     fun health(context: Context): ModelHealth {
@@ -44,6 +44,7 @@ object LocalAiEngine {
         val file = path?.let(::File)
         val configured = file?.isFile == true
         val valid = configured && isValidGguf(file!!)
+        val runtimeCompatible = configured && isRuntimeCompatible(file!!)
         val fileSizeMb = if (configured) file!!.length() / (1024L * 1024L) else 0L
         val availableRamMb = availableRamMb(context)
 
@@ -58,6 +59,8 @@ object LocalAiEngine {
         val warning = when {
             !configured -> "مدل محلی هنوز انتخاب نشده است."
             !valid -> "فایل انتخاب‌شده GGUF سالم نیست یا دانلود ناقص مانده است."
+            !runtimeCompatible ->
+                "این مدل از Quant آزمایشی ARM استفاده می‌کند و روی بعضی چیپ‌ها ممکن است Native-crash بدهد. مدل «سبک پایدار» را نصب کن."
             legacySlowQuant ->
                 "این مدل از Quant قدیمی استفاده می‌کند. برای سرعت بهتر، مدل «سریع مخصوص ARM» را نصب کن."
             fileSizeMb > 900 && availableRamMb < 2200 ->
@@ -100,6 +103,9 @@ object LocalAiEngine {
         val file = File(path)
         if (!file.isFile) error("فایل مدل پیدا نشد.")
         if (!isValidGguf(file)) error("فایل مدل GGUF معتبر نیست یا ناقص دانلود شده است.")
+        if (!isRuntimeCompatible(file)) {
+            error("این مدل با حالت پایدار همیشه‌یار سازگار نیست. مدل «سبک پایدار Q4_K_M» را نصب کن.")
+        }
 
         val memoryWarning = health(context).warning
         DiagnosticsLogger.log(
@@ -274,6 +280,13 @@ object LocalAiEngine {
         systemPrompt = SYSTEM_PROMPT,
         maxTokens = maxTokens
     )
+
+    private fun isRuntimeCompatible(file: File): Boolean {
+        val name = file.name.lowercase()
+        return !name.contains("q4_0_4_4") &&
+            !name.contains("q4_0_4_8") &&
+            !name.contains("q4_0_8_8")
+    }
 
     private fun isQwen3(file: File): Boolean =
         file.name.lowercase().contains("qwen3")
