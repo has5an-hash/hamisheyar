@@ -84,7 +84,8 @@ object LocalAiEngine {
         context: Context,
         prompt: String,
         extraContext: String = "",
-        onStage: (String) -> Unit = {}
+        onStage: (String) -> Unit = {},
+        modelPathOverride: String? = null
     ): AiAnswer = mutex.withLock {
         val started = System.currentTimeMillis()
 
@@ -98,7 +99,7 @@ object LocalAiEngine {
             )
         }
 
-        val path = AppSettings.modelPath(context)
+        val path = modelPathOverride ?: AppSettings.modelPath(context)
             ?: error("مدل محلی هنوز انتخاب نشده است.")
         val file = File(path)
         if (!file.isFile) error("فایل مدل پیدا نشد.")
