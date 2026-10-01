@@ -74,6 +74,17 @@ object LocalAiEngine {
         onStage: (String) -> Unit = {}
     ): AiAnswer = mutex.withLock {
         val started = System.currentTimeMillis()
+
+        val instant = if (extraContext.isBlank()) FastReplyEngine.tryReply(prompt) else null
+        if (instant != null) {
+            return@withLock AiAnswer(
+                text = instant,
+                tokensPerSecond = 0f,
+                durationMs = System.currentTimeMillis() - started,
+                modelName = "instant-local"
+            )
+        }
+
         val path = AppSettings.modelPath(context)
             ?: error("مدل محلی هنوز انتخاب نشده است.")
         val file = File(path)
@@ -109,17 +120,6 @@ object LocalAiEngine {
                 appendLine()
                 append("/no_think")
             }
-        }
-
-        val fastReply = FastReplyEngine.tryReply(prompt)
-        if (fastReply != null && extraContext.isBlank()) {
-            val duration = System.currentTimeMillis() - started
-            return@withLock AiAnswer(
-                text = fastReply,
-                tokensPerSecond = 0f,
-                durationMs = duration,
-                modelName = "instant-local"
-            )
         }
 
         val first = runCompletion(
