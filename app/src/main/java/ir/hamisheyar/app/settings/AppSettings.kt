@@ -26,12 +26,48 @@ object AppSettings {
     fun notificationListenerDisconnectedAt(context: Context): Long =
         prefs(context).getLong("notification_listener_disconnected_at", 0L)
 
+    fun notificationListenerConnected(context: Context): Boolean =
+        prefs(context).getBoolean("notification_listener_connected", false)
+
     fun markNotificationListenerConnected(context: Context) = prefs(context).edit()
+        .putBoolean("notification_listener_connected", true)
         .putLong("notification_listener_connected_at", System.currentTimeMillis())
         .apply()
 
     fun markNotificationListenerDisconnected(context: Context) = prefs(context).edit()
+        .putBoolean("notification_listener_connected", false)
         .putLong("notification_listener_disconnected_at", System.currentTimeMillis())
+        .apply()
+
+    fun voiceWhisperPath(context: Context): String? = prefs(context).getString("voice_whisper_path", null)
+    fun setVoiceWhisperPath(context: Context, value: String?) = prefs(context).edit()
+        .putString("voice_whisper_path", value)
+        .apply()
+
+    fun voiceTtsDir(context: Context): String? = prefs(context).getString("voice_tts_dir", null)
+    fun setVoiceTtsDir(context: Context, value: String?) = prefs(context).edit()
+        .putString("voice_tts_dir", value)
+        .apply()
+
+    fun voiceWhisperDownloadId(context: Context): Long = prefs(context).getLong("voice_whisper_download_id", -1L)
+    fun setVoiceWhisperDownloadId(context: Context, id: Long) = prefs(context).edit()
+        .putLong("voice_whisper_download_id", id)
+        .apply()
+    fun clearVoiceWhisperDownload(context: Context) = prefs(context).edit()
+        .remove("voice_whisper_download_id")
+        .apply()
+
+    fun voiceTtsDownloadId(context: Context): Long = prefs(context).getLong("voice_tts_download_id", -1L)
+    fun setVoiceTtsDownloadId(context: Context, id: Long) = prefs(context).edit()
+        .putLong("voice_tts_download_id", id)
+        .apply()
+    fun clearVoiceTtsDownload(context: Context) = prefs(context).edit()
+        .remove("voice_tts_download_id")
+        .apply()
+
+    fun offlineVoiceEnabled(context: Context) = prefs(context).getBoolean("offline_voice_enabled", true)
+    fun setOfflineVoiceEnabled(context: Context, value: Boolean) = prefs(context).edit()
+        .putBoolean("offline_voice_enabled", value)
         .apply()
 
     fun announcementEnabled(context: Context) = prefs(context).getBoolean("announce", false)
