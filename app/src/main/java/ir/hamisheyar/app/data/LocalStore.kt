@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import ir.hamisheyar.app.diagnostics.DiagnosticsLogger
 
 data class ChatMessage(
     val id: Long,
@@ -25,18 +26,23 @@ data class InboxEvent(
 )
 
 class LocalStore(context: Context) {
-    private val helper = db(context.applicationContext)
+    private val appContext = context.applicationContext
+    private val helper = db(appContext)
 
-    fun addMessage(role: String, text: String): Long {
+    fun addMessage(role: String, text: String): Long = runCatching {
         val values = ContentValues().apply {
             put("role", role)
             put("text", text)
             put("created_at", System.currentTimeMillis())
         }
-        return helper.writableDatabase.insert("messages", null, values)
+        helper.writableDatabase.insertOrThrow("messages", null, values)
+    }.onFailure {
+        DiagnosticsLogger.log(appContext, "DB", "addMessage failed", it)
+    }.getOrElse {
+        -System.nanoTime()
     }
 
-    fun messages(limit: Int = 200): List<ChatMessage> {
+    fun messages(limit: Int = 200): List<ChatMessage> = runCatching {
         val out = mutableListOf<ChatMessage>()
         helper.readableDatabase.query(
             "messages",
@@ -49,8 +55,10 @@ class LocalStore(context: Context) {
                 out += ChatMessage(c.getLong(0), c.getString(1), c.getString(2), c.getLong(3))
             }
         }
-        return out.reversed()
-    }
+        out.reversed()
+    }.onFailure {
+        DiagnosticsLogger.log(appContext, "DB", "messages read failed", it)
+    }.getOrDefault(emptyList())
 
     fun addEvent(
         source: String,
@@ -71,10 +79,16 @@ class LocalStore(context: Context) {
             put("shared_uri", sharedUri)
             put("created_at", System.currentTimeMillis())
         }
-        return helper.writableDatabase.insert("events", null, values)
+        return runCatching {
+            helper.writableDatabase.insertOrThrow("events", null, values)
+        }.onFailure {
+            DiagnosticsLogger.log(appContext, "DB", "addEvent failed", it)
+        }.getOrElse {
+            -System.nanoTime()
+        }
     }
 
-    fun events(limit: Int = 120): List<InboxEvent> {
+    fun events(limit: Int = 120): List<InboxEvent> = runCatching {
         val out = mutableListOf<InboxEvent>()
         helper.readableDatabase.query(
             "events",
@@ -97,14 +111,20 @@ class LocalStore(context: Context) {
                 )
             }
         }
-        return out
-    }
+        out
+    }.onFailure {
+        DiagnosticsLogger.log(appContext, "DB", "events read failed", it)
+    }.getOrDefault(emptyList())
 
     fun latestEvent(): InboxEvent? = events(1).firstOrNull()
 
     fun clearAll() {
-        helper.writableDatabase.delete("messages", null, null)
-        helper.writableDatabase.delete("events", null, null)
+        runCatching {
+            helper.writableDatabase.delete("messages", null, null)
+            helper.writableDatabase.delete("events", null, null)
+        }.onFailure {
+            DiagnosticsLogger.log(appContext, "DB", "clearAll failed", it)
+        }
     }
 
     private class Db(context: Context) : SQLiteOpenHelper(context, "hamisheyar.db", null, 1) {
