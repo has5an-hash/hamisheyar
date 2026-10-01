@@ -35,9 +35,12 @@ object AccessManager {
     fun notificationAccessState(context: Context): NotificationAccessState {
         val granted = isNotificationAccessGranted(context)
         val connectedAt = ir.hamisheyar.app.settings.AppSettings.notificationListenerConnectedAt(context)
-        val connectedRecently = granted &&
-            connectedAt > 0L &&
-            System.currentTimeMillis() - connectedAt < 10 * 60 * 1000L
+        val disconnectedAt = ir.hamisheyar.app.settings.AppSettings.notificationListenerDisconnectedAt(context)
+        val persistedConnected = ir.hamisheyar.app.settings.AppSettings.notificationListenerConnected(context)
+        val connectedRecently = granted && (
+            persistedConnected ||
+                (connectedAt > 0L && connectedAt >= disconnectedAt)
+            )
 
         val installer = installerPackage(context)
         val likelySideloaded = installer == null || installer !in trustedStorePackages
