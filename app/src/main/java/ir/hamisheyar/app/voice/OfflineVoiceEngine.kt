@@ -40,9 +40,6 @@ object OfflineVoiceEngine {
 
     private var whisperModel: WhisperModel? = null
     private var whisperPath: String? = null
-    private var tts: OfflineTts? = null
-    private var ttsDir: String? = null
-
     private val recording = AtomicBoolean(false)
     private var recorder: AudioRecord? = null
     private var recordThread: Thread? = null
@@ -200,30 +197,22 @@ object OfflineVoiceEngine {
             val dataDir = VoiceAssetsManager.ttsEspeakDir(context)
                 ?: error("داده‌های تلفظ فارسی پیدا نشد.")
 
-            val engine = if (tts != null && ttsDir == root.absolutePath) {
-                tts!!
-            } else {
-                runCatching { tts?.release() }
-                val config = OfflineTtsConfig(
-                    model = OfflineTtsModelConfig(
-                        vits = OfflineTtsVitsModelConfig(
-                            model = modelFile.absolutePath,
-                            tokens = tokens.absolutePath,
-                            dataDir = dataDir.absolutePath,
-                            lengthScale = 1.0f
-                        ),
-                        numThreads = 2,
-                        debug = false,
-                        provider = "cpu"
+            val config = OfflineTtsConfig(
+                model = OfflineTtsModelConfig(
+                    vits = OfflineTtsVitsModelConfig(
+                        model = modelFile.absolutePath,
+                        tokens = tokens.absolutePath,
+                        dataDir = dataDir.absolutePath,
+                        lengthScale = 1.0f
                     ),
-                    maxNumSentences = 1,
-                    silenceScale = 0.18f
-                )
-                OfflineTts(config = config).also {
-                    tts = it
-                    ttsDir = root.absolutePath
-                }
-            }
+                    numThreads = 1,
+                    debug = false,
+                    provider = "cpu"
+                ),
+                maxNumSentences = 1,
+                silenceScale = 0.18f
+            )
+            val engine = OfflineTts(config = config)
 
             val safeText = text
                 .replace(Regex("""https?://\S+"""), "")
@@ -241,6 +230,8 @@ object OfflineVoiceEngine {
                     "ساخت صدای فارسی انجام نشد: " + (t.message ?: "خطای نامشخص"),
                     t
                 )
+            } finally {
+                runCatching { engine.release() }
             }
 
             onStage("دارم صحبت می‌کنم…")
@@ -276,9 +267,6 @@ object OfflineVoiceEngine {
             whisperPath = null
         }
         ttsMutex.withLock {
-            runCatching { tts?.release() }
-            tts = null
-            ttsDir = null
             stopSpeaking()
         }
     }
