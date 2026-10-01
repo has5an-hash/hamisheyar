@@ -16,6 +16,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare stable test signing key
+        shell: bash
+        run: |
+          base64 --decode ci/hamisheyar-debug.keystore.b64 > app/hamisheyar-debug.keystore
+          chmod 600 app/hamisheyar-debug.keystore
+
       - name: JDK 17
         uses: actions/setup-java@v5
         with:
