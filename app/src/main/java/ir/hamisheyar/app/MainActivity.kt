@@ -611,7 +611,7 @@ private fun ChatScreen(incomingShare: String?) {
                     instant != null -> instant
                     !LocalAiEngine.isConfigured(context) -> {
                         val health = LocalAiEngine.health(context)
-                        health.warning ?: "مدل محلی هنوز آماده نیست. از تنظیمات مدل سریع مخصوص ARM را دانلود و تست کن."
+                        health.warning ?: "مدل محلی هنوز آماده نیست. از تنظیمات مدل سبک پایدار را دانلود و تست کن."
                     }
                     else -> {
                         runCatching {
@@ -1004,8 +1004,8 @@ private fun SettingsScreen() {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("دانلود مدل سریع مخصوص ARM • ۳۵۲ MB", fontWeight = FontWeight.Bold)
-                                Text("Qwen2.5 0.5B • بهینه برای گوشی‌های ARM و کم‌رم", style = MaterialTheme.typography.labelSmall)
+                                Text("دانلود مدل سبک پایدار • ۳۵۲ MB", fontWeight = FontWeight.Bold)
+                                Text("Qwen2.5 0.5B • Quant استاندارد Q4_K_M و سازگارتر", style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         Spacer(Modifier.height(8.dp))
