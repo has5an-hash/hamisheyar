@@ -104,6 +104,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ir.hamisheyar.app.ai.LocalAiEngine
+import ir.hamisheyar.app.ai.FastReplyEngine
 import ir.hamisheyar.app.ai.ModelDownloadManager
 import ir.hamisheyar.app.data.ChatMessage
 import ir.hamisheyar.app.data.InboxEvent
@@ -114,6 +115,8 @@ import ir.hamisheyar.app.settings.AppSettings
 import ir.hamisheyar.app.system.AccessManager
 import ir.hamisheyar.app.ui.HamisheyarTheme
 import ir.hamisheyar.app.ui.VoiceScreen
+import ir.hamisheyar.app.voice.OfflineVoiceEngine
+import ir.hamisheyar.app.voice.VoiceAssetsManager
 import ir.hamisheyar.app.web.SearchHit
 import ir.hamisheyar.app.web.WebResearchService
 import kotlinx.coroutines.Dispatchers
@@ -500,6 +503,7 @@ private fun ChatScreen(incomingShare: String?) {
     var input by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var generationStatus by remember { mutableStateOf<String?>(null) }
+    var inlineListening by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     LaunchedEffect(incomingShare) {
@@ -512,23 +516,55 @@ private fun ChatScreen(incomingShare: String?) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
-    val voiceLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val text = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-            if (!text.isNullOrBlank()) input = text
+    val micPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        generationStatus = if (granted) {
+            "میکروفون آماده است؛ دوباره روی آیکن میکروفون بزن."
+        } else {
+            "برای گفت‌وگوی صوتی، اجازه میکروفون لازم است."
         }
     }
 
     fun startVoice() {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if (!VoiceAssetsManager.isSttReady(context)) {
+            runCatching { VoiceAssetsManager.startInstall(context) }
+            generationStatus = "دارم بسته ویس آفلاین رو آماده می‌کنم؛ از تب «ویس» هم می‌تونی وضعیتش رو ببینی."
             return
         }
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+
+        if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            return
         }
-        runCatching { voiceLauncher.launch(intent) }
+
+        if (!inlineListening) {
+            runCatching {
+                OfflineVoiceEngine.startRecording(context)
+                inlineListening = true
+                generationStatus = "گوش می‌دم… وقتی حرفت تموم شد دوباره روی میکروفون بزن."
+            }.onFailure {
+                generationStatus = it.message ?: "میکروفون شروع نشد."
+            }
+        } else {
+            inlineListening = false
+            generationStatus = "دارم صدات رو روی خود گوشی تبدیل می‌کنم…"
+            scope.launch {
+                runCatching {
+                    OfflineVoiceEngine.stopAndTranscribe(context) {
+                        generationStatus = it
+                    }
+                }.onSuccess {
+                    input = it.text
+                    generationStatus = null
+                }.onFailure {
+                    generationStatus = it.message ?: "تشخیص گفتار انجام نشد."
+                }
+            }
+        }
     }
 
     fun send() {
@@ -549,21 +585,26 @@ private fun ChatScreen(incomingShare: String?) {
                     if (hits.isEmpty()) "" else "نتایج جست‌وجوی تازه وب:\n" + WebResearchService.asContext(hits)
                 } else ""
 
-                val answerText = if (!LocalAiEngine.isConfigured(context)) {
-                    val health = LocalAiEngine.health(context)
-                    health.warning ?: "مدل محلی هنوز آماده نیست. از تنظیمات مدل را دانلود و تست کن."
-                } else {
-                    runCatching {
-                        LocalAiEngine.answer(
-                            context = context,
-                            prompt = prompt,
-                            extraContext = webContext,
-                            onStage = { generationStatus = it }
-                        ).text
-                    }.getOrElse {
-                        DiagnosticsLogger.log(context, "CHAT", "chat generation failed", it)
-                        "اجرای مدل محلی انجام نشد: " + (it.message ?: "خطای نامشخص") +
-                            "\n\nاز تنظیمات روی «تست مدل» بزن تا علت دقیق مشخص شود."
+                val instant = if (webContext.isBlank()) FastReplyEngine.tryReply(prompt) else null
+                val answerText = when {
+                    instant != null -> instant
+                    !LocalAiEngine.isConfigured(context) -> {
+                        val health = LocalAiEngine.health(context)
+                        health.warning ?: "مدل محلی هنوز آماده نیست. از تنظیمات مدل سریع مخصوص ARM را دانلود و تست کن."
+                    }
+                    else -> {
+                        runCatching {
+                            LocalAiEngine.answer(
+                                context = context,
+                                prompt = prompt,
+                                extraContext = webContext,
+                                onStage = { generationStatus = it }
+                            ).text
+                        }.getOrElse {
+                            DiagnosticsLogger.log(context, "CHAT", "chat generation failed", it)
+                            "اجرای مدل محلی انجام نشد: " + (it.message ?: "خطای نامشخص") +
+                                "\n\nاز تنظیمات روی «تست مدل» بزن تا علت دقیق مشخص شود."
+                        }
                     }
                 }
 
@@ -649,7 +690,10 @@ private fun ChatScreen(incomingShare: String?) {
                 ) {
                     Row {
                         IconButton(onClick = { startVoice() }) {
-                            Icon(Icons.Rounded.Mic, contentDescription = "صدا")
+                            Icon(
+                                if (inlineListening) Icons.Rounded.Stop else Icons.Rounded.Mic,
+                                contentDescription = if (inlineListening) "پایان ضبط" else "صدا"
+                            )
                         }
                         if (AppSettings.webResearchEnabled(context)) {
                             AssistChip(onClick = {}, label = { Text("وب روشن") }, leadingIcon = { Icon(Icons.Rounded.Cloud, null) })
