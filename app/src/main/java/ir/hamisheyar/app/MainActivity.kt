@@ -132,15 +132,17 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val incomingShare = mutableStateOf<String?>(null)
+    private val openVoice = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         incomingShare.value = intent.getStringExtra(EXTRA_INCOMING_SHARE)
+        openVoice.value = intent.getBooleanExtra(EXTRA_OPEN_VOICE, false)
         setContent {
             HamisheyarTheme {
                 androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    HamisheyarRoot(incomingShare.value)
+                    HamisheyarRoot(incomingShare.value, openVoice.value)
                 }
             }
         }
@@ -150,10 +152,12 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         incomingShare.value = intent.getStringExtra(EXTRA_INCOMING_SHARE)
+        openVoice.value = intent.getBooleanExtra(EXTRA_OPEN_VOICE, false)
     }
 
     companion object {
         const val EXTRA_INCOMING_SHARE = "incoming_share"
+        const val EXTRA_OPEN_VOICE = "open_voice"
     }
 }
 
@@ -167,11 +171,14 @@ private enum class MainTab(val title: String, val icon: ImageVector) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HamisheyarRoot(incomingShare: String?) {
+private fun HamisheyarRoot(incomingShare: String?, openVoice: Boolean) {
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
 
     if (!incomingShare.isNullOrBlank()) {
         LaunchedEffect(incomingShare) { tab = MainTab.CHAT }
+    }
+    if (openVoice) {
+        LaunchedEffect(openVoice) { tab = MainTab.VOICE }
     }
 
     Scaffold(
