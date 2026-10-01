@@ -1058,6 +1058,36 @@ private fun SettingsScreen() {
             }
         }
 
+        run {
+            val deviceHealth = LocalAiEngine.health(context)
+            val profile = when {
+                deviceHealth.availableRamMb < 1200 -> "خیلی سبک"
+                deviceHealth.availableRamMb < 2200 -> "کم‌رم / اقتصادی"
+                deviceHealth.availableRamMb < 3500 -> "متعادل"
+                else -> "قدرت بالاتر"
+            }
+            Card(shape = RoundedCornerShape(22.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("پروفایل خودکار دستگاه", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        Build.MANUFACTURER + " " + Build.MODEL,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "RAM آزاد فعلی: " + deviceHealth.availableRamMb + " MB • پروفایل: " + profile,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Context و تعداد Thread مدل بر اساس همین وضعیت به‌صورت خودکار تنظیم می‌شود.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         Text("دسترسی‌های سیستمی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         val accessState = AccessManager.notificationAccessState(context)
         NotificationAccessCard(
