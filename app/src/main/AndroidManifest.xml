@@ -51,6 +51,12 @@
         </service>
 
         <service
+            android:name=".ai.AiInferenceService"
+            android:exported="false"
+            android:process=":ai"
+            android:stopWithTask="false" />
+
+        <service
             android:name=".service.FloatingAssistantService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
