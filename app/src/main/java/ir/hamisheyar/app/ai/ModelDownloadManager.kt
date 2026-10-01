@@ -26,12 +26,12 @@ data class ModelDownloadState(
 
 object ModelDownloadManager {
     val FAST = ModelPreset(
-        id = "qwen25-05b-arm-q4",
-        title = "مدل سریع مخصوص ARM",
-        description = "حدود ۳۵۲ مگابایت؛ بهینه برای گوشی‌های ARM و مناسب گوشی‌های اقتصادی",
-        fileName = "Qwen2.5-0.5B-Instruct-Q4_0_4_4.gguf",
-        url = "https://huggingface.co/bartowski/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-Q4_0_4_4.gguf?download=true",
-        expectedBytes = 352L * 1024L * 1024L
+        id = "qwen25-05b-q4km-safe",
+        title = "مدل سبک پایدار",
+        description = "حدود ۳۹۸ مگابایت؛ Quant استاندارد Q4_K_M برای سازگاری بیشتر با گوشی‌های مختلف",
+        fileName = "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+        url = "https://huggingface.co/tensorblock/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf?download=true",
+        expectedBytes = 398L * 1024L * 1024L
     )
 
     val BALANCED = ModelPreset(
