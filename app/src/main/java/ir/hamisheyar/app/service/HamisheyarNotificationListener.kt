@@ -5,9 +5,16 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import ir.hamisheyar.app.data.LocalStore
 import ir.hamisheyar.app.settings.AppSettings
-import ir.hamisheyar.app.voice.SpeechOutput
+import ir.hamisheyar.app.voice.OfflineVoiceEngine
+import ir.hamisheyar.app.voice.VoiceAssetsManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class HamisheyarNotificationListener : NotificationListenerService() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onListenerConnected() {
         super.onListenerConnected()
@@ -48,16 +55,29 @@ class HamisheyarNotificationListener : NotificationListenerService() {
         )
         NotificationActionRegistry.remember(item)
 
-        if (AppSettings.announcementEnabled(this)) {
+        if (AppSettings.announcementEnabled(this) && VoiceAssetsManager.isTtsReady(this)) {
             val phrase = if (source == "اینستاگرام") {
                 "از اینستاگرام یک اعلان جدید داری."
             } else {
                 "یه پیام از $sender داری."
             }
-            SpeechOutput.speak(this, phrase)
+            scope.launch {
+                runCatching {
+                    OfflineVoiceEngine.speakPersian(
+                        this@HamisheyarNotificationListener,
+                        phrase,
+                        speed = 1.05f
+                    )
+                }
+            }
         }
 
         sendBroadcast(android.content.Intent(ACTION_INBOX_CHANGED).setPackage(packageName))
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
     }
 
     companion object {
