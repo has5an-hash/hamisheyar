@@ -3,6 +3,7 @@ package ir.hamisheyar.app.assistant
 import android.content.Context
 import ir.hamisheyar.app.ai.FastReplyEngine
 import ir.hamisheyar.app.ai.LocalAiEngine
+import ir.hamisheyar.app.ai.SafeAiClient
 import ir.hamisheyar.app.data.LocalStore
 import ir.hamisheyar.app.service.NotificationActionRegistry
 import ir.hamisheyar.app.settings.AppSettings
@@ -79,7 +80,7 @@ object AssistantController {
 
         val contextBlock = listOf(eventContext, webContext).filter { it.isNotBlank() }.joinToString("\n\n")
         return runCatching {
-            val answer = LocalAiEngine.answer(context, rawInput, contextBlock)
+            val answer = SafeAiClient.answer(context, rawInput, contextBlock)
             AssistantResult(answer.text)
         }.getOrElse {
             AssistantResult("نتونستم مدل محلی را اجرا کنم: ${it.message ?: "خطای نامشخص"}")
