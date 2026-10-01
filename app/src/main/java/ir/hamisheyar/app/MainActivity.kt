@@ -818,6 +818,11 @@ private fun SettingsScreen() {
     var modelDownloadState by remember { mutableStateOf(ModelDownloadManager.inspect(context)) }
     var modelTestRunning by remember { mutableStateOf(false) }
     var modelTestResult by remember { mutableStateOf<String?>(null) }
+    var voiceSttReady by remember { mutableStateOf(VoiceAssetsManager.isSttReady(context)) }
+    var voiceTtsReady by remember { mutableStateOf(VoiceAssetsManager.isTtsReady(context)) }
+    var voiceDownloading by remember { mutableStateOf(false) }
+    var voiceProgress by remember { mutableStateOf(0f) }
+    var voiceMessage by remember { mutableStateOf("بسته صوتی هنوز نصب نشده.") }
     var privacyDialog by remember { mutableStateOf(false) }
     var clearDialog by remember { mutableStateOf(false) }
 
@@ -831,7 +836,17 @@ private fun SettingsScreen() {
                 modelPath = state.completedPath
                 importMessage = "مدل دانلود شد و آماده استفاده است."
             }
-            delay(if (state.active) 1_000L else 3_000L)
+            val voice = runCatching {
+                VoiceAssetsManager.inspectAndPrepare(context)
+            }.getOrNull()
+            if (voice != null) {
+                voiceSttReady = voice.sttReady
+                voiceTtsReady = voice.ttsReady
+                voiceDownloading = voice.downloading
+                voiceProgress = voice.progress
+                voiceMessage = voice.message
+            }
+            delay(if (state.active || voiceDownloading) 1_000L else 3_000L)
         }
     }
 
@@ -864,7 +879,6 @@ private fun SettingsScreen() {
     }
 
     val modelFile = modelPath?.let(::File)?.takeIf { it.isFile }
-    val onDeviceSpeech = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -932,8 +946,8 @@ private fun SettingsScreen() {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("دانلود مدل سبک و پایدار • ۴۲۹ MB", fontWeight = FontWeight.Bold)
-                                Text("Qwen2.5 0.5B • مناسب شروع و تست سریع", style = MaterialTheme.typography.labelSmall)
+                                Text("دانلود مدل سریع مخصوص ARM • ۳۵۲ MB", fontWeight = FontWeight.Bold)
+                                Text("Qwen2.5 0.5B • بهینه برای گوشی‌های ARM و کم‌رم", style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -1086,19 +1100,82 @@ private fun SettingsScreen() {
             AppSettings.setSmsEnabled(context, it)
         }
 
-        Card(shape = RoundedCornerShape(20.dp)) {
+        Card(shape = RoundedCornerShape(22.dp)) {
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Mic, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("تشخیص گفتار محلی", fontWeight = FontWeight.Bold)
+                    Icon(Icons.Rounded.Mic, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("موتور ویس مستقل همیشه‌یار", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (voiceSttReady && voiceTtsReady) {
+                                "Whisper فارسی + صدای فارسی آفلاین آماده‌اند؛ Google Voice استفاده نمی‌شود."
+                            } else {
+                                "برای شنیدن و صحبت‌کردن مستقل، یک بار بسته صوتی حدود ۱۰۰ مگابایت نصب می‌شود."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    if (onDeviceSpeech) "موتور On-device اندروید روی این گوشی در دسترس است."
-                    else "اندروید موتور On-device تضمینی گزارش نکرده؛ فرمان صوتی ممکن است بسته به موتور گوشی به اینترنت نیاز داشته باشد.",
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Spacer(Modifier.height(12.dp))
+
+                if (voiceDownloading) {
+                    LinearProgressIndicator(
+                        progress = { voiceProgress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(voiceMessage, style = MaterialTheme.typography.labelSmall)
+                } else if (!(voiceSttReady && voiceTtsReady)) {
+                    Button(
+                        onClick = {
+                            runCatching { VoiceAssetsManager.startInstall(context) }
+                                .onSuccess {
+                                    voiceDownloading = true
+                                    voiceMessage = "دانلود بسته صوتی شروع شد…"
+                                }
+                                .onFailure {
+                                    voiceMessage = "شروع دانلود ممکن نشد: " + (it.message ?: "خطا")
+                                }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("نصب بسته ویس آفلاین")
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(voiceMessage, style = MaterialTheme.typography.labelSmall)
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            "✓ میکروفون مستقل و صدای فارسی آماده است",
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                runCatching {
+                                    OfflineVoiceEngine.speakPersian(
+                                        context,
+                                        "سلام، من همیشه یارم. صدای آفلاین من آماده است."
+                                    )
+                                }.onFailure {
+                                    voiceMessage = "تست صدا ناموفق بود: " + (it.message ?: "خطا")
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("تست صدای فارسی")
+                    }
+                }
             }
         }
 
