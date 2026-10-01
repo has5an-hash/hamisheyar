@@ -157,7 +157,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (AccessManager.isNotificationAccessGranted(this)) {
+        val notificationState = AccessManager.notificationAccessState(this)
+        if (notificationState.granted && !notificationState.serviceConnectedRecently) {
             AccessManager.requestNotificationListenerReconnect(this)
         }
     }
