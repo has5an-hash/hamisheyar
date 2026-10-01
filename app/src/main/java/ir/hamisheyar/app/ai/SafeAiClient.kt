@@ -12,6 +12,7 @@ import android.os.Message
 import android.os.Messenger
 import android.os.RemoteException
 import ir.hamisheyar.app.diagnostics.DiagnosticsLogger
+import ir.hamisheyar.app.settings.AppSettings
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.atomic.AtomicBoolean
@@ -32,6 +33,7 @@ object SafeAiClient {
     const val KEY_DURATION = "duration"
     const val KEY_MODEL = "model"
     const val KEY_ERROR = "error"
+    const val KEY_MODEL_PATH = "model_path"
 
     suspend fun answer(
         context: Context,
@@ -117,6 +119,7 @@ object SafeAiClient {
                         data = Bundle().apply {
                             putString(KEY_PROMPT, prompt)
                             putString(KEY_EXTRA, extraContext)
+                            putString(KEY_MODEL_PATH, AppSettings.modelPath(app))
                         }
                     }
 
