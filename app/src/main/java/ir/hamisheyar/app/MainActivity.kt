@@ -115,6 +115,7 @@ import ir.hamisheyar.app.service.FloatingAssistantService
 import ir.hamisheyar.app.settings.AppSettings
 import ir.hamisheyar.app.system.AccessManager
 import ir.hamisheyar.app.ui.HamisheyarTheme
+import ir.hamisheyar.app.ui.ProfessionalHomeScreen
 import ir.hamisheyar.app.ui.VoiceScreen
 import ir.hamisheyar.app.voice.OfflineVoiceEngine
 import ir.hamisheyar.app.voice.VoiceAssetsManager
@@ -207,7 +208,10 @@ private fun HamisheyarRoot(incomingShare: String?) {
                 .padding(inner)
         ) {
             when (tab) {
-                MainTab.HOME -> HomeScreen(onOpenChat = { tab = MainTab.CHAT })
+                MainTab.HOME -> ProfessionalHomeScreen(
+                    onOpenChat = { tab = MainTab.CHAT },
+                    onOpenVoice = { tab = MainTab.VOICE }
+                )
                 MainTab.CHAT -> ChatScreen(incomingShare)
                 MainTab.VOICE -> VoiceScreen()
                 MainTab.INBOX -> InboxScreen()
