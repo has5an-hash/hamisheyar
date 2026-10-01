@@ -1,15 +1,32 @@
 package ir.hamisheyar.app.ai
 
+import android.app.ActivityManager
 import android.content.Context
 import dev.ffmpegkit.llama.Llama
 import dev.ffmpegkit.llama.LlamaConfig
 import dev.ffmpegkit.llama.LlamaModel
+import ir.hamisheyar.app.diagnostics.DiagnosticsLogger
 import ir.hamisheyar.app.settings.AppSettings
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.io.RandomAccessFile
 
-data class AiAnswer(val text: String, val tokensPerSecond: Float)
+data class AiAnswer(
+    val text: String,
+    val tokensPerSecond: Float,
+    val durationMs: Long,
+    val modelName: String
+)
+
+data class ModelHealth(
+    val configured: Boolean,
+    val validGguf: Boolean,
+    val modelName: String?,
+    val fileSizeMb: Long,
+    val availableRamMb: Long,
+    val warning: String?
+)
 
 object LocalAiEngine {
     private val mutex = Mutex()
@@ -18,30 +35,146 @@ object LocalAiEngine {
 
     fun isConfigured(context: Context): Boolean {
         val path = AppSettings.modelPath(context) ?: return false
-        return File(path).isFile
+        val file = File(path)
+        return file.isFile && isValidGguf(file)
+    }
+
+    fun health(context: Context): ModelHealth {
+        val path = AppSettings.modelPath(context)
+        val file = path?.let(::File)
+        val configured = file?.isFile == true
+        val valid = configured && isValidGguf(file!!)
+        val fileSizeMb = if (configured) file!!.length() / (1024L * 1024L) else 0L
+        val availableRamMb = availableRamMb(context)
+
+        val warning = when {
+            !configured -> "مدل محلی هنوز انتخاب نشده است."
+            !valid -> "فایل انتخاب‌شده GGUF سالم نیست یا دانلود ناقص مانده است."
+            fileSizeMb > 900 && availableRamMb < 2200 ->
+                "مدل برای RAM آزاد فعلی سنگین است؛ مدل سبک را انتخاب کن."
+            fileSizeMb > 450 && availableRamMb < 1200 ->
+                "RAM آزاد گوشی کم است و مدل ممکن است بسیار کند یا ناپایدار شود."
+            else -> null
+        }
+
+        return ModelHealth(
+            configured = configured,
+            validGguf = valid,
+            modelName = file?.name,
+            fileSizeMb = fileSizeMb,
+            availableRamMb = availableRamMb,
+            warning = warning
+        )
     }
 
     suspend fun answer(
         context: Context,
         prompt: String,
-        extraContext: String = ""
+        extraContext: String = "",
+        onStage: (String) -> Unit = {}
     ): AiAnswer = mutex.withLock {
-        val active = ensureModel(context)
+        val started = System.currentTimeMillis()
+        val path = AppSettings.modelPath(context)
+            ?: error("مدل محلی هنوز انتخاب نشده است.")
+        val file = File(path)
+        if (!file.isFile) error("فایل مدل پیدا نشد.")
+        if (!isValidGguf(file)) error("فایل مدل GGUF معتبر نیست یا ناقص دانلود شده است.")
+
+        val memoryWarning = health(context).warning
+        DiagnosticsLogger.log(
+            context,
+            "AI",
+            "request model=${file.name} sizeMb=${file.length() / (1024L * 1024L)} ramMb=${availableRamMb(context)} warning=${memoryWarning.orEmpty()}"
+        )
+
+        onStage(
+            if (loadedPath == path && model?.isLoaded == true) {
+                "مدل آماده است؛ دارم جواب می‌سازم…"
+            } else {
+                "دارم مدل را روی گوشی آماده می‌کنم… اولین پاسخ کمی طول می‌کشد."
+            }
+        )
+
+        val active = ensureModel(context, file)
+        onStage("مدل آماده شد؛ در حال تولید پاسخ…")
+
         val finalPrompt = buildString {
             if (extraContext.isNotBlank()) {
                 appendLine("اطلاعات زمینه‌ای:")
                 appendLine(extraContext)
                 appendLine()
             }
-            append(prompt)
+            append(prompt.trim())
+            if (isQwen3(file)) {
+                appendLine()
+                append("/no_think")
+            }
         }
-        val result = Llama.complete(
-            active,
+
+        val first = runCompletion(
+            active = active,
             prompt = finalPrompt,
-            systemPrompt = SYSTEM_PROMPT,
-            maxTokens = 512
+            maxTokens = if (isQwen3(file)) 192 else 224
         )
-        AiAnswer(result.text.trim(), result.tokensPerSecond)
+
+        var clean = AiTextSanitizer.clean(first.text)
+        var tps = first.tokensPerSecond
+
+        if (clean.isBlank()) {
+            DiagnosticsLogger.log(
+                context,
+                "AI",
+                "empty/think-only response from ${file.name}; retrying in fast mode"
+            )
+            onStage("پاسخ اول ناقص بود؛ دارم یک بار سریع دوباره تلاش می‌کنم…")
+
+            val retryPrompt = buildString {
+                appendLine(prompt.trim())
+                appendLine()
+                appendLine("فقط پاسخ نهایی، کوتاه و مستقیم را بنویس. وارد فرایند فکر کردن نشو.")
+                append("/no_think")
+            }
+            val retry = runCompletion(
+                active = active,
+                prompt = retryPrompt,
+                maxTokens = 160
+            )
+            clean = AiTextSanitizer.clean(retry.text)
+            tps = retry.tokensPerSecond
+        }
+
+        if (clean.isBlank()) {
+            val error = IllegalStateException(
+                "مدل خروجی قابل نمایش تولید نکرد. مدل را از تنظیمات تست کن یا مدل سبک پیشنهادی را نصب کن."
+            )
+            DiagnosticsLogger.log(context, "AI", "generation failed: empty output", error)
+            throw error
+        }
+
+        val duration = System.currentTimeMillis() - started
+        DiagnosticsLogger.log(
+            context,
+            "AI",
+            "success model=${file.name} durationMs=$duration tps=$tps chars=${clean.length}"
+        )
+
+        AiAnswer(
+            text = clean,
+            tokensPerSecond = tps,
+            durationMs = duration,
+            modelName = file.name
+        )
+    }
+
+    suspend fun selfTest(
+        context: Context,
+        onStage: (String) -> Unit = {}
+    ): AiAnswer {
+        return answer(
+            context = context,
+            prompt = "فقط همین عبارت را کوتاه جواب بده: آماده‌ام",
+            onStage = onStage
+        )
     }
 
     suspend fun reset() = mutex.withLock {
@@ -50,37 +183,97 @@ object LocalAiEngine {
         loadedPath = null
     }
 
-    private suspend fun ensureModel(context: Context): LlamaModel {
-        val path = AppSettings.modelPath(context)
-            ?: error("مدل محلی هنوز انتخاب نشده است.")
-        if (!File(path).isFile) error("فایل مدل پیدا نشد.")
-
+    private suspend fun ensureModel(context: Context, file: File): LlamaModel {
+        val path = file.absolutePath
         val current = model
         if (current != null && current.isLoaded && loadedPath == path) return current
 
         current?.let(Llama::releaseModel)
-        val threads = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(2, 6)
-        return Llama.loadModel(
-            modelPath = path,
-            config = LlamaConfig(
-                contextSize = 3072,
-                threads = threads,
-                gpuLayers = 0,
-                temperature = 0.45f,
-                topP = 0.9f,
-                topK = 40
-            )
-        ).also {
-            model = it
-            loadedPath = path
+        model = null
+        loadedPath = null
+
+        val fileSizeMb = file.length() / (1024L * 1024L)
+        val contextSize = when {
+            fileSizeMb <= 550 -> 1536
+            else -> 1792
         }
+        val threads = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(2, 4)
+
+        DiagnosticsLogger.log(
+            context,
+            "AI",
+            "loading model=${file.name} ctx=$contextSize threads=$threads"
+        )
+
+        return try {
+            Llama.loadModel(
+                modelPath = path,
+                config = LlamaConfig(
+                    contextSize = contextSize,
+                    threads = threads,
+                    gpuLayers = 0,
+                    temperature = 0.7f,
+                    topP = 0.8f,
+                    topK = 20
+                )
+            ).also {
+                model = it
+                loadedPath = path
+                DiagnosticsLogger.log(context, "AI", "model loaded: ${file.name}")
+            }
+        } catch (t: Throwable) {
+            DiagnosticsLogger.log(context, "AI", "model load failed: ${file.name}", t)
+            throw IllegalStateException(
+                when {
+                    t is OutOfMemoryError ->
+                        "RAM گوشی برای این مدل کافی نیست. مدل سبک را از تنظیمات نصب کن."
+                    else ->
+                        "مدل روی این گوشی Load نشد: " + (t.message ?: "خطای نامشخص")
+                },
+                t
+            )
+        }
+    }
+
+    private suspend fun runCompletion(
+        active: LlamaModel,
+        prompt: String,
+        maxTokens: Int
+    ) = Llama.complete(
+        active,
+        prompt = prompt,
+        systemPrompt = SYSTEM_PROMPT,
+        maxTokens = maxTokens
+    )
+
+    private fun isQwen3(file: File): Boolean =
+        file.name.lowercase().contains("qwen3")
+
+    fun isValidGguf(file: File): Boolean {
+        if (!file.isFile || file.length() < 4L) return false
+        return runCatching {
+            RandomAccessFile(file, "r").use { raf ->
+                val magic = ByteArray(4)
+                raf.readFully(magic)
+                magic.contentEquals(byteArrayOf('G'.code.toByte(), 'G'.code.toByte(), 'U'.code.toByte(), 'F'.code.toByte()))
+            }
+        }.getOrDefault(false)
+    }
+
+    private fun availableRamMb(context: Context): Long {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        manager.getMemoryInfo(info)
+        return info.availMem / (1024L * 1024L)
     }
 
     private const val SYSTEM_PROMPT = """
 تو «همیشه‌یار» هستی؛ دستیار شخصی فارسی‌زبان، دقیق، آرام و کاربردی روی گوشی کاربر.
 پاسخ‌ها را پیش‌فرض کوتاه، روان و فارسی بده مگر کاربر جزئیات بخواهد.
+پاسخ نهایی را مستقیم بده و زنجیره فکر یا تحلیل درونی را نمایش نده.
 برای ادعاهای حساس یا مشکوک با قطعیت ساختگی حرف نزن و تفاوت بین واقعیت، احتمال و حدس را روشن کن.
 اگر اطلاعات وب در متن زمینه‌ای آمده، فقط از همان اطلاعات برای بخش به‌روز استفاده کن.
 هیچ‌وقت وانمود نکن کاری را انجام داده‌ای که واقعاً انجام نشده است.
+/no_think
 """
 }
