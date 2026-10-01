@@ -20,6 +20,20 @@ object AppSettings {
         .remove("model_download_file")
         .apply()
 
+    fun notificationListenerConnectedAt(context: Context): Long =
+        prefs(context).getLong("notification_listener_connected_at", 0L)
+
+    fun notificationListenerDisconnectedAt(context: Context): Long =
+        prefs(context).getLong("notification_listener_disconnected_at", 0L)
+
+    fun markNotificationListenerConnected(context: Context) = prefs(context).edit()
+        .putLong("notification_listener_connected_at", System.currentTimeMillis())
+        .apply()
+
+    fun markNotificationListenerDisconnected(context: Context) = prefs(context).edit()
+        .putLong("notification_listener_disconnected_at", System.currentTimeMillis())
+        .apply()
+
     fun announcementEnabled(context: Context) = prefs(context).getBoolean("announce", false)
     fun setAnnouncementEnabled(context: Context, value: Boolean) = prefs(context).edit().putBoolean("announce", value).apply()
 
