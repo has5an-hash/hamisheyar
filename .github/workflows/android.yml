@@ -47,6 +47,17 @@ jobs:
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace --no-daemon
 
+      - name: Verify APK signature and manifest
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/hamisheyar-badging.txt
+          grep -q "package: name='ir.hamisheyar.app'" /tmp/hamisheyar-badging.txt
+          grep -q "versionCode='4'" /tmp/hamisheyar-badging.txt
+          grep -q "versionName='0.3.0'" /tmp/hamisheyar-badging.txt
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
