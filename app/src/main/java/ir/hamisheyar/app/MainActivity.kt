@@ -647,7 +647,11 @@ private fun ChatScreen(incomingShare: String?) {
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         if (busy) {
             Column(Modifier.fillMaxWidth()) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -690,8 +694,10 @@ private fun ChatScreen(incomingShare: String?) {
         }
 
         Card(
-            modifier = Modifier.fillMaxWidth().padding(10.dp),
-            shape = RoundedCornerShape(24.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
             Column(Modifier.padding(10.dp)) {
                 OutlinedTextField(
@@ -737,14 +743,50 @@ private fun ChatMessageBubble(message: ChatMessage) {
         contentAlignment = if (user) Alignment.CenterStart else Alignment.CenterEnd
     ) {
         Surface(
-            color = if (user) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(20.dp),
+            color = if (user) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+            shape = if (user) {
+                RoundedCornerShape(22.dp, 22.dp, 8.dp, 22.dp)
+            } else {
+                RoundedCornerShape(22.dp, 22.dp, 22.dp, 8.dp)
+            },
+            tonalElevation = if (user) 0.dp else 2.dp,
+            shadowElevation = if (user) 0.dp else 1.dp,
             modifier = Modifier.fillMaxWidth(0.88f)
         ) {
-            Column(Modifier.padding(14.dp)) {
-                Text(if (user) "شما" else "همیشه‌یار", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                Text(message.text, style = MaterialTheme.typography.bodyMedium)
+            Column(Modifier.padding(horizontal = 15.dp, vertical = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!user) {
+                        Surface(
+                            shape = RoundedCornerShape(99.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                "✦",
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(Modifier.width(7.dp))
+                    }
+                    Text(
+                        if (user) "شما" else "همیشه‌یار",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (user) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.secondary
+                    )
+                }
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    message.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }
