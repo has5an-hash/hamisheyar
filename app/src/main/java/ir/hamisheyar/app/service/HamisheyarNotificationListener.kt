@@ -9,6 +9,18 @@ import ir.hamisheyar.app.voice.SpeechOutput
 
 class HamisheyarNotificationListener : NotificationListenerService() {
 
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        AppSettings.markNotificationListenerConnected(this)
+        sendBroadcast(android.content.Intent(ACTION_INBOX_CHANGED).setPackage(packageName))
+    }
+
+    override fun onListenerDisconnected() {
+        AppSettings.markNotificationListenerDisconnected(this)
+        sendBroadcast(android.content.Intent(ACTION_INBOX_CHANGED).setPackage(packageName))
+        super.onListenerDisconnected()
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         val item = sbn ?: return
         if (item.packageName == packageName) return
