@@ -84,17 +84,23 @@ class FloatingAssistantService : Service() {
 
     private fun createBubble() {
         if (bubble != null) return
-        val size = dp(58)
+        val size = dp(62)
         val text = TextView(this).apply {
-            this.text = "یار"
-            textSize = 15f
+            this.text = "✦"
+            textSize = 27f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             elevation = dp(10).toFloat()
-            background = GradientDrawable().apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(
+                    Color.parseColor("#5757D8"),
+                    Color.parseColor("#7255D9"),
+                    Color.parseColor("#008C89")
+                )
+            ).apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#6750A4"))
-                setStroke(dp(2), Color.parseColor("#EADDFF"))
+                setStroke(dp(2), Color.parseColor("#EEF0FF"))
             }
         }
         val params = WindowManager.LayoutParams(
@@ -155,22 +161,22 @@ class FloatingAssistantService : Service() {
             elevation = dp(12).toFloat()
             background = GradientDrawable().apply {
                 cornerRadius = dp(24).toFloat()
-                setColor(Color.parseColor("#FFFBFE"))
-                setStroke(dp(1), Color.parseColor("#E7E0EC"))
+                setColor(Color.parseColor("#FCFCFF"))
+                setStroke(dp(1), Color.parseColor("#DFE3F0"))
             }
         }
 
         val title = TextView(this).apply {
-            text = "همیشه‌یار"
-            textSize = 19f
-            setTextColor(Color.parseColor("#1D1B20"))
+            text = "همیشه‌یار  ✦"
+            textSize = 20f
+            setTextColor(Color.parseColor("#181A20"))
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             gravity = Gravity.RIGHT
         }
         val status = TextView(this).apply {
-            text = "چی لازم داری؟"
+            text = "هرجا هستی، بگو چی لازم داری"
             textSize = 14f
-            setTextColor(Color.parseColor("#49454F"))
+            setTextColor(Color.parseColor("#5A5D68"))
             gravity = Gravity.RIGHT
             setPadding(0, dp(8), 0, dp(8))
         }
@@ -181,8 +187,8 @@ class FloatingAssistantService : Service() {
             maxLines = 3
             background = GradientDrawable().apply {
                 cornerRadius = dp(14).toFloat()
-                setColor(Color.parseColor("#F7F2FA"))
-                setStroke(dp(1), Color.parseColor("#CAC4D0"))
+                setColor(Color.parseColor("#F2F4FA"))
+                setStroke(dp(1), Color.parseColor("#D9DDEA"))
             }
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
