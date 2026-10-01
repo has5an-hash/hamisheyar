@@ -1262,6 +1262,23 @@ private fun SettingsScreen() {
                     ) {
                         Text("تست صدای فارسی")
                     }
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                OfflineVoiceEngine.reset()
+                                VoiceAssetsManager.clear(context)
+                                voiceSttReady = false
+                                voiceTtsReady = false
+                                voiceDownloading = false
+                                voiceProgress = 0f
+                                voiceMessage = "بسته صوتی پاک شد؛ دوباره نصبش کن."
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("نصب مجدد بسته صوتی")
+                    }
                 }
             }
         }
