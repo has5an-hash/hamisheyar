@@ -111,10 +111,21 @@ object LocalAiEngine {
             }
         }
 
+        val fastReply = FastReplyEngine.tryReply(prompt)
+        if (fastReply != null && extraContext.isBlank()) {
+            val duration = System.currentTimeMillis() - started
+            return@withLock AiAnswer(
+                text = fastReply,
+                tokensPerSecond = 0f,
+                durationMs = duration,
+                modelName = "instant-local"
+            )
+        }
+
         val first = runCompletion(
             active = active,
             prompt = finalPrompt,
-            maxTokens = if (isQwen3(file)) 192 else 224
+            maxTokens = if (isQwen3(file)) 72 else 80
         )
 
         var clean = AiTextSanitizer.clean(first.text)
@@ -134,10 +145,11 @@ object LocalAiEngine {
                 appendLine("فقط پاسخ نهایی، کوتاه و مستقیم را بنویس. وارد فرایند فکر کردن نشو.")
                 append("/no_think")
             }
-            val retry = runCompletion(
-                active = active,
+            val retry = Llama.complete(
+                active,
                 prompt = retryPrompt,
-                maxTokens = 160
+                systemPrompt = "",
+                maxTokens = 48
             )
             clean = AiTextSanitizer.clean(retry.text)
             tps = retry.tokensPerSecond
@@ -193,11 +205,18 @@ object LocalAiEngine {
         loadedPath = null
 
         val fileSizeMb = file.length() / (1024L * 1024L)
+        val freeRam = availableRamMb(context)
         val contextSize = when {
-            fileSizeMb <= 550 -> 1536
-            else -> 1792
+            freeRam < 1200 -> 512
+            freeRam < 2200 -> 768
+            fileSizeMb <= 550 -> 1024
+            else -> 1280
         }
-        val threads = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(2, 4)
+        val threads = when {
+            freeRam < 1600 -> 2
+            Runtime.getRuntime().availableProcessors() >= 8 -> 3
+            else -> 2
+        }
 
         DiagnosticsLogger.log(
             context,
@@ -212,8 +231,8 @@ object LocalAiEngine {
                     contextSize = contextSize,
                     threads = threads,
                     gpuLayers = 0,
-                    temperature = 0.7f,
-                    topP = 0.8f,
+                    temperature = 0.45f,
+                    topP = 0.85f,
                     topK = 20
                 )
             ).also {
@@ -269,7 +288,8 @@ object LocalAiEngine {
 
     private const val SYSTEM_PROMPT = """
 تو «همیشه‌یار» هستی؛ دستیار شخصی فارسی‌زبان، دقیق، آرام و کاربردی روی گوشی کاربر.
-پاسخ‌ها را پیش‌فرض کوتاه، روان و فارسی بده مگر کاربر جزئیات بخواهد.
+پاسخ‌ها را کوتاه، روان و فارسی بده مگر کاربر جزئیات بخواهد.
+برای مکالمه‌های ساده در یک یا دو جمله جواب بده.
 پاسخ نهایی را مستقیم بده و زنجیره فکر یا تحلیل درونی را نمایش نده.
 برای ادعاهای حساس یا مشکوک با قطعیت ساختگی حرف نزن و تفاوت بین واقعیت، احتمال و حدس را روشن کن.
 اگر اطلاعات وب در متن زمینه‌ای آمده، فقط از همان اطلاعات برای بخش به‌روز استفاده کن.
