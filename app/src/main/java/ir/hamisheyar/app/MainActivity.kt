@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Mic
@@ -112,6 +113,7 @@ import ir.hamisheyar.app.service.FloatingAssistantService
 import ir.hamisheyar.app.settings.AppSettings
 import ir.hamisheyar.app.system.AccessManager
 import ir.hamisheyar.app.ui.HamisheyarTheme
+import ir.hamisheyar.app.ui.VoiceScreen
 import ir.hamisheyar.app.web.SearchHit
 import ir.hamisheyar.app.web.WebResearchService
 import kotlinx.coroutines.Dispatchers
@@ -153,6 +155,7 @@ class MainActivity : ComponentActivity() {
 private enum class MainTab(val title: String, val icon: ImageVector) {
     HOME("خانه", Icons.Rounded.Home),
     CHAT("گفتگو", Icons.Rounded.ChatBubble),
+    VOICE("ویس", Icons.Rounded.GraphicEq),
     INBOX("صندوق", Icons.Rounded.Inbox),
     SETTINGS("تنظیمات", Icons.Rounded.Settings)
 }
@@ -202,6 +205,7 @@ private fun HamisheyarRoot(incomingShare: String?) {
             when (tab) {
                 MainTab.HOME -> HomeScreen(onOpenChat = { tab = MainTab.CHAT })
                 MainTab.CHAT -> ChatScreen(incomingShare)
+                MainTab.VOICE -> VoiceScreen()
                 MainTab.INBOX -> InboxScreen()
                 MainTab.SETTINGS -> SettingsScreen()
             }
