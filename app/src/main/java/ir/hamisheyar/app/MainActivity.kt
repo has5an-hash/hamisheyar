@@ -1004,7 +1004,7 @@ private fun SettingsScreen() {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("دانلود مدل سبک پایدار • ۳۵۲ MB", fontWeight = FontWeight.Bold)
+                                Text("دانلود مدل سبک پایدار • ۳۹۸ MB", fontWeight = FontWeight.Bold)
                                 Text("Qwen2.5 0.5B • Quant استاندارد Q4_K_M و سازگارتر", style = MaterialTheme.typography.labelSmall)
                             }
                         }
@@ -1085,7 +1085,7 @@ private fun SettingsScreen() {
                                 modelTestRunning = false
                             }
                         },
-                        enabled = !modelTestRunning && !importing && !modelDownloadState.active,
+                        enabled = LocalAiEngine.isConfigured(context) && !modelTestRunning && !importing && !modelDownloadState.active,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (modelTestRunning) {
