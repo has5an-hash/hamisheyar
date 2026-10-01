@@ -28,7 +28,6 @@ import ir.hamisheyar.app.MainActivity
 import ir.hamisheyar.app.R
 import ir.hamisheyar.app.assistant.AssistantAction
 import ir.hamisheyar.app.assistant.AssistantController
-import ir.hamisheyar.app.voice.VoiceNoteRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,12 +45,10 @@ class FloatingAssistantService : Service() {
     private var recordButton: Button? = null
     private var voiceButton: Button? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private lateinit var recorder: VoiceNoteRecorder
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        recorder = VoiceNoteRecorder(this)
         startAsForeground()
         if (Settings.canDrawOverlays(this)) createBubble() else stopSelf()
     }
@@ -298,57 +295,18 @@ class FloatingAssistantService : Service() {
     }
 
     private fun startVoiceNote() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            panelStatus?.text = "اجازه میکروفون لازم است."
-            return
-        }
-        runCatching {
-            recorder.start()
-            recordButton?.text = "⏹ پایان و ارسال"
-            panelStatus?.text = "در حال ضبط ویس…"
-            OfflineVoiceEngine.stopSpeaking()
-        }.onFailure {
-            panelStatus?.text = "شروع ضبط ویس ممکن نشد."
-        }
+        panelStatus?.text = "حالت ویس مستقل رو باز می‌کنم…"
+        startVoiceCommand()
     }
 
     private fun stopVoiceNoteAndShare() {
-        if (!recorder.isRecording) {
-            panelStatus?.text = "الان ویسی در حال ضبط نیست."
-            return
-        }
-        val file = recorder.stop()
-        recordButton?.text = "🎤 ویس"
-        if (file == null) {
-            panelStatus?.text = "فایل صوتی ساخته نشد."
-            return
-        }
-
-        val uri = FileProvider.getUriForFile(this, packageName + ".files", file)
-        val targetPackage = NotificationActionRegistry.latestPackage()
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "audio/mp4"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (!targetPackage.isNullOrBlank()) setPackage(targetPackage)
-        }
-        runCatching {
-            if (send.resolveActivity(packageManager) != null) {
-                startActivity(send)
-            } else {
-                send.setPackage(null)
-                startActivity(Intent.createChooser(send, "ارسال ویس").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
-            panelStatus?.text = "ویس آماده شد و پیام‌رسان برای ارسال باز شد."
-        }.onFailure {
-            panelStatus?.text = "نتونستم پیام‌رسان را برای ارسال ویس باز کنم."
-        }
+        panelStatus?.text = "برای پاسخ صوتی، از حالت ویس مستقل استفاده کن."
+        startVoiceCommand()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
-        recorder.cancel()
         scope.cancel()
         removePanel()
         bubble?.let { runCatching { windowManager.removeView(it) } }
