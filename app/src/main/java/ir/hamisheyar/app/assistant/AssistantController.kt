@@ -1,6 +1,7 @@
 package ir.hamisheyar.app.assistant
 
 import android.content.Context
+import ir.hamisheyar.app.ai.FastReplyEngine
 import ir.hamisheyar.app.ai.LocalAiEngine
 import ir.hamisheyar.app.data.LocalStore
 import ir.hamisheyar.app.service.NotificationActionRegistry
@@ -53,6 +54,10 @@ object AssistantController {
                 if (ok) "فرستادم: $replyText"
                 else "برای آخرین اعلان، دکمه پاسخ سریع در اختیار همیشه‌یار نیست. خود پیام‌رسان باید این قابلیت را در اعلانش ارائه کند."
             )
+        }
+
+        FastReplyEngine.tryReply(rawInput)?.let {
+            return AssistantResult(it)
         }
 
         val eventContext = latest?.let {
