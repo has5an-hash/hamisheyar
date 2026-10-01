@@ -25,6 +25,7 @@ class AiInferenceService : Service() {
             val replyTo = message.replyTo ?: return@Handler true
             val prompt = message.data.getString(SafeAiClient.KEY_PROMPT).orEmpty()
             val extra = message.data.getString(SafeAiClient.KEY_EXTRA).orEmpty()
+            val modelPath = message.data.getString(SafeAiClient.KEY_MODEL_PATH)
 
             scope.launch {
                 try {
@@ -42,7 +43,8 @@ class AiInferenceService : Service() {
                                     }
                                 )
                             }
-                        }
+                        },
+                        modelPathOverride = modelPath
                     )
 
                     replyTo.send(
