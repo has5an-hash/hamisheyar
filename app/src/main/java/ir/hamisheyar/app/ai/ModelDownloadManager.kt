@@ -26,21 +26,21 @@ data class ModelDownloadState(
 
 object ModelDownloadManager {
     val FAST = ModelPreset(
-        id = "qwen3-0.6b-q4",
-        title = "مدل سبک",
-        description = "حدود ۴۲۹ مگابایت؛ مناسب گوشی‌های ضعیف‌تر و پاسخ‌های سریع‌تر",
-        fileName = "Qwen3-0.6B-Q4_0.gguf",
-        url = "https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_0.gguf?download=true",
+        id = "qwen25-05b-q4",
+        title = "مدل سبک و پایدار",
+        description = "حدود ۴۲۹ مگابایت؛ پیشنهادی برای شروع و گوشی‌های ضعیف‌تر",
+        fileName = "qwen2.5-0.5b-instruct-q4_0.gguf",
+        url = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf?download=true",
         expectedBytes = 429L * 1024L * 1024L
     )
 
     val BALANCED = ModelPreset(
-        id = "qwen3-1.7b-q4km",
-        title = "مدل پیشنهادی",
-        description = "حدود ۱.۲۸ گیگابایت؛ کیفیت بهتر برای گوشی‌های قوی‌تر",
-        fileName = "Qwen3-1.7B-Q4_K_M.gguf",
-        url = "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf?download=true",
-        expectedBytes = 1_280L * 1024L * 1024L
+        id = "qwen25-15b-q4km",
+        title = "مدل قوی‌تر",
+        description = "حدود ۱.۱۲ گیگابایت؛ کیفیت بهتر روی گوشی‌هایی با RAM بیشتر",
+        fileName = "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf?download=true",
+        expectedBytes = 1_120L * 1024L * 1024L
     )
 
     fun start(context: Context, preset: ModelPreset): Long {
@@ -85,13 +85,19 @@ object ModelDownloadManager {
                     val name = AppSettings.modelDownloadFile(context)
                     val root = context.getExternalFilesDir(null)
                     val file = if (root != null && !name.isNullOrBlank()) File(root, "models/" + name) else null
-                    if (file != null && file.isFile && file.length() > 1_000_000L) {
+                    if (file != null && file.isFile && file.length() > 1_000_000L && LocalAiEngine.isValidGguf(file)) {
                         AppSettings.setModelPath(context, file.absolutePath)
                         AppSettings.clearModelDownload(context)
-                        ModelDownloadState(false, 1f, "مدل آماده است.", file.absolutePath)
+                        ModelDownloadState(false, 1f, "مدل سالم دانلود شد و آماده تست است.", file.absolutePath)
                     } else {
+                        file?.delete()
                         AppSettings.clearModelDownload(context)
-                        ModelDownloadState(false, 0f, "فایل مدل بعد از دانلود پیدا نشد.", failed = true)
+                        ModelDownloadState(
+                            false,
+                            0f,
+                            "فایل دانلودشده GGUF معتبر نبود یا دانلود ناقص شد؛ دوباره تلاش کن.",
+                            failed = true
+                        )
                     }
                 }
 
