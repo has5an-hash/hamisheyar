@@ -1,7 +1,6 @@
 package ir.hamisheyar.app.assistant
 
 import android.content.Context
-import ir.hamisheyar.app.ai.FastReplyEngine
 import ir.hamisheyar.app.data.LocalStore
 import ir.hamisheyar.app.service.NotificationActionRegistry
 
@@ -31,19 +30,21 @@ object AssistantController {
             return AssistantResult("${latest.sender} گفته: ${latest.body}")
         }
 
-        if ((input.contains("ویسش") || input.contains("صوتش")) && (input.contains("پلی") || input.contains("پخش"))) {
+        if ((input.contains("ویسش") || input.contains("صوتش")) &&
+            (input.contains("پلی") || input.contains("پخش"))
+        ) {
             val ok = NotificationActionRegistry.playLatest(context)
             return AssistantResult(
-                if (ok) "پخشش کردم." else "این پیام‌رسان امکان پخش مستقیم ویس از اعلان را در اختیار همیشه‌یار نگذاشته."
+                if (ok) "پخشش کردم."
+                else "این پیام‌رسان امکان پخش مستقیم ویس از اعلان را در اختیار همیشه‌یار نگذاشته."
             )
         }
 
         if (input.contains("با ویس") && (input.contains("جواب") || input.contains("پیام"))) {
-            return AssistantResult("باشه، الان بگو. وقتی تمام شد دکمه پایان و ارسال را بزن.", AssistantAction.START_VOICE_NOTE)
-        }
-
-        if (input == "ارسال کن" || input.endsWith("ارسال کن")) {
-            return AssistantResult("باشه.", AssistantAction.STOP_AND_SHARE_VOICE)
+            return AssistantResult(
+                "باشه؛ حالت ویس ChatGPT را باز می‌کنم.",
+                AssistantAction.START_VOICE_NOTE
+            )
         }
 
         val replyText = extractReply(rawInput)
@@ -51,12 +52,8 @@ object AssistantController {
             val ok = NotificationActionRegistry.replyLatest(context, replyText)
             return AssistantResult(
                 if (ok) "فرستادم: $replyText"
-                else "برای آخرین اعلان، دکمه پاسخ سریع در اختیار همیشه‌یار نیست. خود پیام‌رسان باید این قابلیت را در اعلانش ارائه کند."
+                else "برای آخرین اعلان، پاسخ سریع در دسترس همیشه‌یار نیست؛ خود پیام‌رسان باید Reply را در اعلان ارائه کند."
             )
-        }
-
-        FastReplyEngine.tryReply(rawInput)?.let {
-            return AssistantResult(it)
         }
 
         return AssistantResult(
