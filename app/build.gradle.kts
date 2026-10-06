@@ -12,12 +12,9 @@ android {
         applicationId = "ir.hamisheyar.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.3.1"
+        versionCode = 6
+        versionName = "0.4.0"
         vectorDrawables.useSupportLibrary = true
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
     }
 
     signingConfigs {
@@ -35,7 +32,10 @@ android {
         }
         release {
             isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -75,13 +75,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
-
-    implementation("dev.ffmpegkit-maintained:llama-android:0.1.1")
-    implementation("dev.ffmpegkit-maintained:whisper-android:1.0.0")
-    implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.8")
-    implementation("org.apache.commons:commons-compress:1.27.1")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jsoup:jsoup:1.18.3")
 
     testImplementation("junit:junit:4.13.2")
 }
