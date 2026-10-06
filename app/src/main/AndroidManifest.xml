@@ -2,11 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <queries>
+        <package android:name="com.openai.chatgpt" />
+    </queries>
 
     <application
         android:name=".HamisheyarApplication"
@@ -51,18 +54,12 @@
         </service>
 
         <service
-            android:name=".ai.AiInferenceService"
-            android:exported="false"
-            android:process=":ai"
-            android:stopWithTask="false" />
-
-        <service
             android:name=".service.FloatingAssistantService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="User-enabled floating AI assistant bubble visible over other apps" />
+                android:value="User-enabled floating assistant bubble for forwarding user requests to ChatGPT and handling permitted notification actions" />
         </service>
 
         <provider
