@@ -1,13 +1,8 @@
 package ir.hamisheyar.app.ui
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,8 +24,6 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Memory
-import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Tune
@@ -60,10 +53,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import ir.hamisheyar.app.ai.LocalAiEngine
+import ir.hamisheyar.app.chatgpt.ChatGptBridge
 import ir.hamisheyar.app.service.FloatingAssistantService
 import ir.hamisheyar.app.system.AccessManager
-import ir.hamisheyar.app.voice.VoiceAssetsManager
 
 @Composable
 fun ProfessionalHomeScreen(
@@ -82,21 +74,10 @@ fun ProfessionalHomeScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val chatGptInstalled = remember(tick) { ChatGptBridge.isInstalled(context) }
     val notification = remember(tick) { AccessManager.notificationAccessState(context) }
     val overlay = remember(tick) { Settings.canDrawOverlays(context) }
-    val model = remember(tick) { LocalAiEngine.isConfigured(context) }
-    val voice = remember(tick) {
-        VoiceAssetsManager.isSttReady(context) && VoiceAssetsManager.isTtsReady(context)
-    }
-    val mic = remember(tick) {
-        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-            PackageManager.PERMISSION_GRANTED
-    }
-
-    val readyCount = listOf(notification.granted, overlay, model, voice, mic).count { it }
-    val micPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { tick++ }
+    val readyCount = listOf(chatGptInstalled, notification.granted, overlay).count { it }
 
     LazyColumn(
         modifier = Modifier
@@ -116,8 +97,8 @@ fun ProfessionalHomeScreen(
                         .background(
                             Brush.linearGradient(
                                 listOf(
-                                    Color(0xFF4848C8),
-                                    Color(0xFF6D55D8),
+                                    Color(0xFF3F46C8),
+                                    Color(0xFF6750D8),
                                     Color(0xFF008C89)
                                 )
                             )
@@ -151,17 +132,17 @@ fun ProfessionalHomeScreen(
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 Text(
-                                    "دستیار شخصی، خصوصی و روی گوشی",
-                                    color = Color.White.copy(alpha = 0.82f),
+                                    "مغز آنلاین با حساب ChatGPT خودت",
+                                    color = Color.White.copy(alpha = 0.84f),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
 
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(22.dp))
                         Text(
-                            if (readyCount >= 4) "تقریباً همه‌چیز آماده‌ست"
-                            else "راه‌اندازی ${readyCount} از ۵ بخش کامل شده",
+                            if (readyCount == 3) "همه‌چیز آماده‌ست"
+                            else "راه‌اندازی $readyCount از ۳ بخش کامل شده",
                             color = Color.White,
                             style = MaterialTheme.typography.titleMedium
                         )
@@ -170,39 +151,33 @@ fun ProfessionalHomeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(8.dp)
-                                .background(
-                                    Color.White.copy(alpha = 0.18f),
-                                    RoundedCornerShape(99.dp)
-                                )
+                                .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(99.dp))
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(readyCount / 5f)
+                                    .fillMaxWidth(readyCount / 3f)
                                     .height(8.dp)
-                                    .background(
-                                        Color.White.copy(alpha = 0.92f),
-                                        RoundedCornerShape(99.dp)
-                                    )
+                                    .background(Color.White.copy(alpha = 0.92f), RoundedCornerShape(99.dp))
                             )
                         }
 
                         Spacer(Modifier.height(20.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Button(
-                                onClick = onOpenVoice,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Rounded.GraphicEq, null)
-                                Spacer(Modifier.width(7.dp))
-                                Text("صحبت کن")
-                            }
-                            FilledTonalButton(
                                 onClick = onOpenChat,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Icon(Icons.Rounded.ChatBubble, null)
                                 Spacer(Modifier.width(7.dp))
                                 Text("چت")
+                            }
+                            FilledTonalButton(
+                                onClick = onOpenVoice,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Rounded.GraphicEq, null)
+                                Spacer(Modifier.width(7.dp))
+                                Text("ویس")
                             }
                         }
                     }
@@ -212,7 +187,7 @@ fun ProfessionalHomeScreen(
 
         item {
             Text(
-                "وضعیت همیشه‌یار",
+                "وضعیت اتصال",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
@@ -222,23 +197,11 @@ fun ProfessionalHomeScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 DashboardMetric(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Rounded.Memory,
-                    title = "مدل محلی",
-                    value = if (model) "آماده" else "نیاز به نصب",
-                    ready = model
+                    icon = Icons.Rounded.SmartToy,
+                    title = "ChatGPT",
+                    value = if (chatGptInstalled) "نصب و آماده" else "نیاز به نصب",
+                    ready = chatGptInstalled
                 )
-                DashboardMetric(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Rounded.GraphicEq,
-                    title = "ویس مستقل",
-                    value = if (voice) "آماده" else "نیاز به بسته صوتی",
-                    ready = voice
-                )
-            }
-        }
-
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 DashboardMetric(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Rounded.Notifications,
@@ -248,14 +211,17 @@ fun ProfessionalHomeScreen(
                     } else "خاموش",
                     ready = notification.granted
                 )
-                DashboardMetric(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Rounded.SmartToy,
-                    title = "حباب شناور",
-                    value = if (overlay) "فعال" else "خاموش",
-                    ready = overlay
-                )
             }
+        }
+
+        item {
+            DashboardMetric(
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Rounded.SmartToy,
+                title = "حباب شناور",
+                value = if (overlay) "فعال" else "خاموش",
+                ready = overlay
+            )
         }
 
         item {
@@ -266,19 +232,44 @@ fun ProfessionalHomeScreen(
             )
         }
 
+        if (!chatGptInstalled) {
+            item {
+                SetupActionCard(
+                    icon = Icons.Rounded.SmartToy,
+                    title = "اپ رسمی ChatGPT",
+                    description = "ChatGPT را نصب کن و داخل خودش با حساب خودت وارد شو. همیشه‌یار رمز یا API Key نمی‌گیرد.",
+                    button = "نصب ChatGPT"
+                ) {
+                    ChatGptBridge.openInstallPage(context)
+                }
+            }
+        } else {
+            item {
+                SetupActionCard(
+                    icon = Icons.Rounded.SmartToy,
+                    title = "حساب ChatGPT خودت",
+                    description = "مدل و سهمیه داخل خود ChatGPT مدیریت می‌شود؛ همیشه‌یار فقط درخواست را تحویل می‌دهد.",
+                    button = "باز کردن ChatGPT",
+                    ready = true
+                ) {
+                    ChatGptBridge.openApp(context)
+                }
+            }
+        }
+
         if (!notification.granted) {
             item {
                 SetupActionCard(
                     icon = Icons.Rounded.Notifications,
                     title = "دسترسی اعلان‌ها",
-                    description = if (notification.likelySideloaded && Build.VERSION.SDK_INT >= 33) {
-                        "اگر اندروید گزینه را قفل کرده، اول اطلاعات برنامه را باز کن و Allow restricted settings را فعال کن."
+                    description = if (notification.likelySideloaded) {
+                        "اگر اندروید گزینه را قفل کرده، از اطلاعات برنامه Allow restricted settings را فعال کن و دوباره برگرد."
                     } else {
                         "برای فهمیدن پیام‌های واتس‌اپ، تلگرام، اینستاگرام و پیامک."
                     },
-                    button = "تنظیم دسترسی"
+                    button = if (notification.likelySideloaded) "اطلاعات برنامه" else "تنظیم دسترسی"
                 ) {
-                    if (notification.likelySideloaded && Build.VERSION.SDK_INT >= 33) {
+                    if (notification.likelySideloaded) {
                         AccessManager.openAppInfoForRestrictedSettings(context)
                     } else {
                         AccessManager.openNotificationAccess(context)
@@ -298,7 +289,7 @@ fun ProfessionalHomeScreen(
                     context.startActivity(
                         Intent(
                             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:" + context.packageName)
+                            Uri.parse("package:${context.packageName}")
                         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     )
                 }
@@ -320,19 +311,6 @@ fun ProfessionalHomeScreen(
             }
         }
 
-        if (!mic) {
-            item {
-                SetupActionCard(
-                    icon = Icons.Rounded.Mic,
-                    title = "میکروفون",
-                    description = "برای حالت ویس مستقل و ضبط پاسخ صوتی.",
-                    button = "اجازه میکروفون"
-                ) {
-                    micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                }
-            }
-        }
-
         item {
             Surface(
                 shape = RoundedCornerShape(22.dp),
@@ -345,7 +323,7 @@ fun ProfessionalHomeScreen(
                     Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.secondary)
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        "همیشه‌یار Local First است؛ مدل، صدا و تاریخچه تا جای ممکن روی خود گوشی پردازش می‌شوند.",
+                        "بدون مدل محلی، بدون دانلود چندصد مگابایتی و بدون API Key؛ ورود و هوش مصنوعی داخل حساب ChatGPT خود کاربر می‌ماند.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
