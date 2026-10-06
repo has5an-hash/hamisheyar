@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import ir.hamisheyar.app.MainActivity
+import ir.hamisheyar.app.chatgpt.ChatGptBridge
 import ir.hamisheyar.app.data.LocalStore
 import ir.hamisheyar.app.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
@@ -29,9 +30,10 @@ class ShareReceiverActivity : ComponentActivity() {
             val stream = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
             val mime = intent.type.orEmpty()
             val copied = if (stream != null) copyIntoApp(stream, mime) else null
+
             val body = when {
                 text.isNotBlank() -> text
-                copied != null -> "فایل به اشتراک گذاشته‌شده: " + copied.name
+                copied != null -> "فایل به اشتراک گذاشته‌شده: ${copied.name}"
                 else -> "مورد به اشتراک گذاشته‌شده"
             }
 
@@ -45,12 +47,35 @@ class ShareReceiverActivity : ComponentActivity() {
             )
 
             if (AppSettings.liveShareEnabled(this@ShareReceiverActivity)) {
-                startActivity(Intent(this@ShareReceiverActivity, MainActivity::class.java).apply {
-                    putExtra(MainActivity.EXTRA_INCOMING_SHARE, body)
-                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                })
+                val prompt = buildString {
+                    append("این مورد را که از یک برنامه دیگر برای همیشه‌یار فرستادم بررسی کن. ")
+                    append("محتوا را توضیح بده، نکات مهمش را بگو و اگر ادعا، لینک یا پیشنهاد مشکوکی دارد هشدار بده.")
+                    if (text.isNotBlank()) {
+                        append("\n\n")
+                        append(text)
+                    }
+                }
+
+                val result = ChatGptBridge.forwardContent(
+                    this@ShareReceiverActivity,
+                    prompt,
+                    stream,
+                    mime
+                )
+                Toast.makeText(this@ShareReceiverActivity, result.message, Toast.LENGTH_LONG).show()
+
+                if (!result.launched) {
+                    startActivity(Intent(this@ShareReceiverActivity, MainActivity::class.java).apply {
+                        putExtra(MainActivity.EXTRA_INCOMING_SHARE, body)
+                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    })
+                }
             } else {
-                Toast.makeText(this@ShareReceiverActivity, "برای بعد داخل صف همیشه‌یار ذخیره شد.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    this@ShareReceiverActivity,
+                    "برای بعد داخل صف همیشه‌یار ذخیره شد.",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
             finish()
         }
@@ -62,7 +87,7 @@ class ShareReceiverActivity : ComponentActivity() {
             val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
                 ?.takeIf { it.length <= 8 }
                 ?: "bin"
-            val file = File(dir, "shared_" + System.currentTimeMillis() + "." + ext)
+            val file = File(dir, "shared_${System.currentTimeMillis()}.$ext")
             contentResolver.openInputStream(uri)?.use { input ->
                 file.outputStream().use { output -> input.copyTo(output) }
             } ?: return@runCatching null
