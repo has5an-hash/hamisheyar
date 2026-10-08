@@ -3,6 +3,11 @@ package ir.hamisheyar.app.ui
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
+import androidx.core.content.ContextCompat
+import ir.hamisheyar.app.service.FloatingAssistantService
+import ir.hamisheyar.app.system.AccessManager
+import java.io.File
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -25,6 +30,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -115,6 +122,7 @@ fun AgenticSettingsScreen() {
     var statusGemini by remember { mutableStateOf("") }
     var statusGroq by remember { mutableStateOf("") }
     var liveShare by remember { mutableStateOf(AppSettings.liveShareEnabled(ctx)) }
+    var clearDialog by remember { mutableStateOf(false) }
     fun open(url: String) {
         ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
@@ -214,7 +222,43 @@ fun AgenticSettingsScreen() {
             }
         }
         HorizontalDivider()
+        Text("دسترسی‌های گوشی", style = MaterialTheme.typography.titleMedium)
+        val notification = AccessManager.notificationAccessState(ctx)
+        Text(if (notification.granted) "✓ اعلان‌ها مجازند" else "اعلان‌ها غیرفعالند")
+        OutlinedButton(onClick = { AccessManager.openNotificationAccess(ctx) },
+            modifier = Modifier.fillMaxWidth()) { Text("مدیریت دسترسی اعلان‌ها") }
+        if (!notification.granted && notification.likelySideloaded) {
+            Text("اگر Android دسترسی را قفل کرده، در اطلاعات برنامه Allow restricted settings را فعال کن.")
+            OutlinedButton(onClick = { AccessManager.openAppInfoForRestrictedSettings(ctx) },
+                modifier = Modifier.fillMaxWidth()) { Text("اطلاعات برنامه") }
+        }
+        val overlay = Settings.canDrawOverlays(ctx)
+        OutlinedButton(onClick = {
+            if (overlay) ContextCompat.startForegroundService(ctx,
+                Intent(ctx, FloatingAssistantService::class.java))
+            else ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + ctx.packageName)))
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (overlay) "اجرای حباب شناور" else "اجازه حباب شناور")
+        }
+        OutlinedButton(onClick = { clearDialog = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("حذف تاریخچه و فایل‌های Share شده")
+        }
         Text("داده‌های درخواست، تصویر و صدا فقط هنگام درخواست خودت به Gemini یا Groq ارسال می‌شوند. مدل‌ها از اینترنت استفاده می‌کنند؛ هیچ مغز واحد جدیدی درون گوشی آموزش داده نمی‌شود.")
+    }
+    if (clearDialog) {
+        AlertDialog(
+            onDismissRequest = { clearDialog = false },
+            title = { Text("حذف داده‌های محلی؟") },
+            text = { Text("تاریخچه، صندوق و فایل‌های Share شده حذف می‌شوند. کلیدهای اتصال باقی می‌مانند.") },
+            confirmButton = { TextButton(onClick = {
+                LocalStore(ctx).clearAll()
+                File(ctx.filesDir, "shared").deleteRecursively()
+                File(ctx.cacheDir, "video-intake").deleteRecursively()
+                clearDialog = false
+            }) { Text("حذف کن") } },
+            dismissButton = { TextButton(onClick = { clearDialog = false }) { Text("لغو") } }
+        )
     }
 }
 

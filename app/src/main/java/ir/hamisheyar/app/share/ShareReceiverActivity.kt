@@ -42,6 +42,8 @@ class ShareReceiverActivity : ComponentActivity() {
             if (!live) {
                 Toast.makeText(this@ShareReceiverActivity,
                     "در صف همیشه‌یار ذخیره شد.", Toast.LENGTH_SHORT).show()
+                finish()
+                return@launch
             }
             startActivity(Intent(this@ShareReceiverActivity, MainActivity::class.java).apply {
                 putExtra(MainActivity.EXTRA_INCOMING_SHARE, body)

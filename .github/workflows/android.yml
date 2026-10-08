@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -65,3 +65,18 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish prerelease APK on main
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk hamisheyar-0.5.0-agentic-beta.apk
+          sha256sum hamisheyar-0.5.0-agentic-beta.apk
+          TAG="v0.5.0-agentic-beta"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" hamisheyar-0.5.0-agentic-beta.apk --clobber
+          else
+            gh release create "$TAG" hamisheyar-0.5.0-agentic-beta.apk --target "$GITHUB_SHA" --title "HamisheYar 0.5.0 Agentic Beta TEST APK" --notes "Test APK; requires both personal Gemini and Groq API keys. Instagram video link extraction is best-effort. Not yet device-certified." --prerelease
+          fi
