@@ -39,15 +39,17 @@ object CredentialVault {
         prefs(context).edit().putString(provider, Base64.encodeToString(bytes, Base64.NO_WRAP)).apply()
     }
 
-    fun get(context: Context, provider: String): String? = try {
+    fun get(context: Context, provider: String): String? {
+        return try {
         val encoded = prefs(context).getString(provider, null) ?: return null
         val bytes = Base64.decode(encoded, Base64.DEFAULT)
         require(bytes.size > 28)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, secret(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
         String(cipher.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8)
-    } catch (_: Exception) {
-        null
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun ready(context: Context) = get(context, "gemini") != null &&
