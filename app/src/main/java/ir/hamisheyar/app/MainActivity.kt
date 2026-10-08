@@ -239,7 +239,7 @@ private fun ChatScreen(incomingShare: String?, incomingPath: String?) {
             val fromShare = mediaPath?.let { File(it) }?.takeIf {
                 it.isFile && it.canonicalPath.startsWith(context.filesDir.canonicalPath + File.separator)
             }
-            val media = if (fromShare != null && fromShare.extension.lowercase() in listOf("mp4", "webm", "mov"))
+            val media = if (fromShare != null && fromShare.extension.lowercase() in listOf("mp4", "webm", "mov", "jpg", "jpeg", "png", "webp"))
                 fromShare
             else {
                 temp = MediaIntake.findPublicVideo(context, prompt) { progress = it }
@@ -548,11 +548,11 @@ private fun SettingsScreen() {
             title = { Text("حریم خصوصی همیشه‌یار") },
             text = {
                 Text(
-                    "• کلیدهای شخصی Gemini و Groq با Android Keystore رمزگذاری و روی همین گوشی نگهداری می‌شوند.\\n" +
-                    "• متن‌ها و رسانه‌های انتخاب‌شده برای بررسی به سرویس‌های شخص ثالث Gemini/Groq فرستاده می‌شوند.\\n" +
-                    "• فایل ویدیو در صورت پشتیبانی برای تحلیل موقتاً در Gemini آپلود و بعد درخواست حذف آن ارسال می‌شود.\\n" +
-                    "• تاریخچه چت و صندوق داخل گوشی ذخیره می‌شود.\\n" +
-                    "• سهمیه رایگان محدود است و API ممکن است هزینه داشته باشد.\\n" +
+                    "• کلیدهای شخصی Gemini و Groq با Android Keystore رمزگذاری و روی همین گوشی نگهداری می‌شوند.\n" +
+                    "• متن‌ها و رسانه‌های انتخاب‌شده برای بررسی به سرویس‌های شخص ثالث Gemini/Groq فرستاده می‌شوند.\n" +
+                    "• فایل ویدیو در صورت پشتیبانی برای تحلیل موقتاً در Gemini آپلود و بعد درخواست حذف آن ارسال می‌شود.\n" +
+                    "• تاریخچه چت و صندوق داخل گوشی ذخیره می‌شود.\n" +
+                    "• سهمیه رایگان محدود است و API ممکن است هزینه داشته باشد.\n" +
                     "• همیشه‌یار بدون اجازه به پیام‌ها و رسانه‌های خصوصی برنامه‌های دیگر دسترسی ندارد."
                 )
             }
