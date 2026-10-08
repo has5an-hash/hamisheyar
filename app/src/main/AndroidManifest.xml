@@ -13,7 +13,7 @@
 
     <application
         android:name=".HamisheyarApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -59,7 +59,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="User-enabled floating assistant bubble for forwarding user requests to ChatGPT and handling permitted notification actions" />
+                android:value="User-enabled assistant overlay for local agent orchestration and permitted notification actions" />
         </service>
 
         <provider
