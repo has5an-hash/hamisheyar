@@ -1,0 +1,48 @@
+name: Hybrid Brain Server
+
+on:
+  push:
+    branches:
+      - main
+      - feature/hybrid-brain-server
+    paths:
+      - "server/**"
+      - "package.json"
+      - "railway.json"
+      - ".github/workflows/server.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run server tests
+        run: npm test
+
+      - name: Smoke-start server
+        shell: bash
+        run: |
+          npm start >/tmp/hamisheyar-server.log 2>&1 &
+          PID=$!
+          trap 'kill $PID || true' EXIT
+          for i in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:3000/health >/tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 0.5
+          done
+          cat /tmp/hamisheyar-server.log
+          exit 1
