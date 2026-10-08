@@ -243,7 +243,7 @@ private fun ChatScreen(incomingShare: String?, incomingPath: String?) {
             val media = if (fromShare != null && fromShare.extension.lowercase() in listOf("mp4", "webm", "mov", "jpg", "jpeg", "png", "webp"))
                 fromShare
             else {
-                temp = MediaIntake.findPublicVideo(context, prompt) { progress = it }
+                temp = try { MediaIntake.findPublicVideo(context, prompt) { progress = it } } catch (_: Exception) { null }
                 temp
             }
             if (media == null && RoutingPolicy.containsSocialVideoLink(prompt)) {
