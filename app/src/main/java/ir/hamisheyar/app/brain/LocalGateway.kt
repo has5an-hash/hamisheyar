@@ -74,7 +74,7 @@ object LocalGateway : BrainGateway {
                     BrainReply(reviewed, "Gemini video + Groq", true)
                 } finally { runCatching { request("DELETE", "https://generativelanguage.googleapis.com/v1beta/" + file.third, mapOf("x-goog-api-key" to g)) } }
             } else {
-                val deep = listOf("راست", "واقعی", "کلاهبردار", "بررسی", "صحت", "ادعا", "تحلیل", "خبر").any(input::contains)
+                val deep = RoutingPolicy.needsReview(input)
                 if (!deep && input.length <= 180) {
                     status("دریافت پاسخ سریع…")
                     val result = try { groq(q, input, GROQ_FAST) } catch (_: IOException) { gemini(g, input) }
