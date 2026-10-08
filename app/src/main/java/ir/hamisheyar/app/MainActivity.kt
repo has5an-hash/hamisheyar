@@ -84,6 +84,7 @@ import ir.hamisheyar.app.brain.BrainSetupCard
 import ir.hamisheyar.app.brain.CredentialVault
 import ir.hamisheyar.app.brain.LocalGateway
 import ir.hamisheyar.app.brain.MediaIntake
+import ir.hamisheyar.app.brain.RoutingPolicy
 import ir.hamisheyar.app.brain.BrainFailure
 import kotlinx.coroutines.launch
 import java.io.File
@@ -245,7 +246,7 @@ private fun ChatScreen(incomingShare: String?, incomingPath: String?) {
                 temp = MediaIntake.findPublicVideo(context, prompt) { progress = it }
                 temp
             }
-            if (media == null && Regex("""https?://(?:www\.)?instagram\.com/(?:reel|p|tv)/""", RegexOption.IGNORE_CASE).containsMatchIn(prompt)) {
+            if (media == null && RoutingPolicy.containsSocialVideoLink(prompt)) {
                 "لینک اینستاگرام را دریافت کردم، ولی خود فایل ویدیو از طریق دسترسی عمومی قابل دانلود نبود. بنابراین ویدیو را ندیده‌ام و درباره درست‌بودن ادعایش قضاوت نمی‌کنم. لطفاً فایل ویدیو را دانلود و با گزینه Share برای همیشه‌یار بفرست."
             } else {
                 val response = LocalGateway.answer(context, prompt, media) { progress = it }
