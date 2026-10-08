@@ -459,7 +459,6 @@ private fun SettingsScreen() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val chatGptInstalled = remember(tick) { ChatGptBridge.isInstalled(context) }
     val access = remember(tick) { AccessManager.notificationAccessState(context) }
 
     Column(
