@@ -80,7 +80,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import ir.hamisheyar.app.chatgpt.ChatGptBridge
+import ir.hamisheyar.app.brain.BrainSetupCard
+import ir.hamisheyar.app.brain.CredentialVault
+import ir.hamisheyar.app.brain.LocalGateway
+import ir.hamisheyar.app.brain.MediaIntake
+import ir.hamisheyar.app.brain.BrainFailure
+import kotlinx.coroutines.launch
+import java.io.File
 import ir.hamisheyar.app.data.ChatMessage
 import ir.hamisheyar.app.data.InboxEvent
 import ir.hamisheyar.app.data.LocalStore
@@ -96,12 +102,14 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val incomingShare = mutableStateOf<String?>(null)
+    private val incomingPath = mutableStateOf<String?>(null)
     private val openVoice = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         incomingShare.value = intent.getStringExtra(EXTRA_INCOMING_SHARE)
+        incomingPath.value = intent.getStringExtra(EXTRA_INCOMING_PATH)
         openVoice.value = intent.getBooleanExtra(EXTRA_OPEN_VOICE, false)
 
         setContent {
@@ -109,7 +117,7 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.runtime.CompositionLocalProvider(
                     LocalLayoutDirection provides LayoutDirection.Rtl
                 ) {
-                    HamisheyarRoot(incomingShare.value, openVoice.value)
+                    HamisheyarRoot(incomingShare.value, incomingPath.value, openVoice.value)
                 }
             }
         }
@@ -132,6 +140,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_INCOMING_SHARE = "incoming_share"
+        const val EXTRA_INCOMING_PATH = "incoming_path"
         const val EXTRA_OPEN_VOICE = "open_voice"
     }
 }
@@ -146,7 +155,7 @@ private enum class MainTab(val title: String, val icon: ImageVector) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HamisheyarRoot(incomingShare: String?, openVoice: Boolean) {
+private fun HamisheyarRoot(incomingShare: String?, incomingPath: String?, openVoice: Boolean) {
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
 
     LaunchedEffect(incomingShare) {
@@ -163,7 +172,7 @@ private fun HamisheyarRoot(incomingShare: String?, openVoice: Boolean) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("همیشه‌یار", fontWeight = FontWeight.ExtraBold)
                         Text(
-                            "پل شخصی شما به ChatGPT",
+                            "دستیار مستقل با دو مغز هوشمند",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -194,7 +203,7 @@ private fun HamisheyarRoot(incomingShare: String?, openVoice: Boolean) {
                     onOpenChat = { tab = MainTab.CHAT },
                     onOpenVoice = { tab = MainTab.VOICE }
                 )
-                MainTab.CHAT -> ChatScreen(incomingShare)
+                MainTab.CHAT -> ChatScreen(incomingShare, incomingPath)
                 MainTab.VOICE -> VoiceScreen()
                 MainTab.INBOX -> InboxScreen()
                 MainTab.SETTINGS -> SettingsScreen()
@@ -204,137 +213,125 @@ private fun HamisheyarRoot(incomingShare: String?, openVoice: Boolean) {
 }
 
 @Composable
-private fun ChatScreen(incomingShare: String?) {
+private fun ChatScreen(incomingShare: String?, incomingPath: String?) {
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val store = remember { LocalStore(context) }
     val messages = remember {
         mutableStateListOf<ChatMessage>().apply { addAll(store.messages()) }
     }
     var input by rememberSaveable { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf("") }
+    var lastShared by rememberSaveable { mutableStateOf("") }
+    var connectedRefresh by remember { mutableIntStateOf(0) }
+    val ready = remember(connectedRefresh) { CredentialVault.ready(context) }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(incomingShare) {
-        if (!incomingShare.isNullOrBlank()) {
-            input = "این مورد را بررسی کن:\n$incomingShare"
+    suspend fun deliver(prompt: String, mediaPath: String?) {
+        if (busy || prompt.isBlank() || !CredentialVault.ready(context)) return
+        busy = true
+        progress = "همیشه‌یار در حال دریافت و آماده‌سازی محتوا…"
+        val userId = store.addMessage("user", prompt)
+        messages += ChatMessage(userId, "user", prompt, System.currentTimeMillis())
+        var temp: File? = null
+        val result = try {
+            val fromShare = mediaPath?.let { File(it) }?.takeIf {
+                it.isFile && it.canonicalPath.startsWith(context.filesDir.canonicalPath + File.separator)
+            }
+            val media = if (fromShare != null && fromShare.extension.lowercase() in listOf("mp4", "webm", "mov"))
+                fromShare
+            else {
+                temp = MediaIntake.findPublicVideo(context, prompt) { progress = it }
+                temp
+            }
+            if (media == null && Regex("""https?://(?:www\.)?instagram\.com/(?:reel|p|tv)/""", RegexOption.IGNORE_CASE).containsMatchIn(prompt)) {
+                "لینک اینستاگرام را دریافت کردم، ولی خود فایل ویدیو از طریق دسترسی عمومی قابل دانلود نبود. بنابراین ویدیو را ندیده‌ام و درباره درست‌بودن ادعایش قضاوت نمی‌کنم. لطفاً فایل ویدیو را دانلود و با گزینه Share برای همیشه‌یار بفرست."
+            } else {
+                val response = LocalGateway.answer(context, prompt, media) { progress = it }
+                response.text
+            }
+        } catch (error: Exception) {
+            "نتوانستم این درخواست را کامل کنم: " + (error.message ?: "خطای اتصال یا رسانه")
+        } finally {
+            temp?.delete()
+            busy = false
+            progress = ""
         }
+        val id = store.addMessage("assistant", result)
+        messages += ChatMessage(id, "assistant", result, System.currentTimeMillis())
     }
 
+    LaunchedEffect(incomingShare, incomingPath) {
+        if (!incomingShare.isNullOrBlank()) {
+            val token = incomingShare + "|" + incomingPath.orEmpty()
+            if (lastShared != token) {
+                lastShared = token
+                if (CredentialVault.ready(context)) deliver("این مورد را بررسی کن: " + incomingShare, incomingPath)
+                else input = "این مورد را بررسی کن: " + incomingShare
+            }
+        }
+    }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
-    fun send() {
-        val prompt = input.trim()
-        if (prompt.isBlank()) return
-
-        input = ""
-        val userId = store.addMessage("user", prompt)
-        messages += ChatMessage(userId, "user", prompt, System.currentTimeMillis())
-
-        val result = ChatGptBridge.sendPrompt(context, prompt)
-        val status = buildString {
-            append(result.message)
-            append("\n\n")
-            append("هوش مصنوعی داخل حساب ChatGPT خودت اجرا می‌شود؛ همیشه‌یار API Key یا مدل جداگانه‌ای ندارد.")
-            if (result.launched) {
-                append(" پاسخ را داخل ChatGPT می‌بینی.")
-            }
-        }
-        val statusId = store.addMessage("assistant", status)
-        messages += ChatMessage(statusId, "assistant", status, System.currentTimeMillis())
-    }
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        Surface(
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                "پیام‌ها از اینجا به اپ رسمی ChatGPT و حساب خودت تحویل داده می‌شوند.",
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center
-            )
-        }
-
-        if (messages.isEmpty()) {
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(28.dp)
-                ) {
-                    Icon(
-                        Icons.Rounded.SmartToy,
-                        null,
-                        Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "چی می‌خوای از ChatGPT بپرسی؟",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "بنویس، یا از اینستاگرام و برنامه‌های دیگر چیزی برای همیشه‌یار Share کن.",
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        if (!ready) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
+                Text("برای گفتگو باید هر دو اتصال Gemini و Groq را فعال کنی.",
+                    style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(10.dp))
+                BrainSetupCard { connectedRefresh++ }
             }
         } else {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("من همیشه‌یار هستم؛ خودم درخواست را پردازش می‌کنم و پاسخ را همین‌جا می‌دهم.",
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            }
             LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                state = listState, modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                items(messages, key = { it.id }) { message ->
-                    ChatMessageBubble(message)
-                }
+                items(messages, key = { it.id }) { ChatMessageBubble(it) }
             }
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-        ) {
-            Column(Modifier.padding(10.dp)) {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("پیام به ChatGPT از طریق همیشه‌یار…") },
-                    maxLines = 5
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = {
-                        ChatGptBridge.openApp(context)
-                    }) {
-                        Icon(Icons.Rounded.OpenInNew, contentDescription = "باز کردن ChatGPT")
-                    }
-                    Button(onClick = { send() }, enabled = input.isNotBlank()) {
+            if (busy) {
+                androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text(progress, Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(Modifier.padding(10.dp)) {
+                    OutlinedTextField(
+                        value = input, onValueChange = { input = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("از همیشه‌یار بپرس…") }, maxLines = 5
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    Button(
+                        onClick = {
+                            val prompt = input.trim()
+                            if (prompt.isNotBlank()) { input = ""; scope.launch { deliver(prompt, null) } }
+                        },
+                        enabled = !busy && input.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Icon(Icons.Rounded.Send, null)
                         Spacer(Modifier.width(6.dp))
-                        Text("فرستادن")
+                        Text("بپرس")
                     }
                 }
             }
         }
     }
 }
-
 @Composable
 private fun ChatMessageBubble(message: ChatMessage) {
     val user = message.role == "user"
@@ -469,42 +466,8 @@ private fun SettingsScreen() {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("اتصال ChatGPT", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Card(shape = RoundedCornerShape(22.dp)) {
-            Column(Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.SmartToy, null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            if (chatGptInstalled) "اپ رسمی ChatGPT پیدا شد" else "اپ ChatGPT نصب نیست",
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "ورود و سهمیه داخل خود ChatGPT است؛ همیشه‌یار رمز، توکن یا API Key شما را نمی‌گیرد.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Icon(
-                        if (chatGptInstalled) Icons.Rounded.CheckCircle else Icons.Rounded.Warning,
-                        null,
-                        tint = if (chatGptInstalled) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.error
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                Button(
-                    onClick = {
-                        if (chatGptInstalled) ChatGptBridge.openApp(context)
-                        else ChatGptBridge.openInstallPage(context)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (chatGptInstalled) "باز کردن ChatGPT" else "نصب ChatGPT")
-                }
-            }
-        }
+        Text("اتصال اجباری Gemini + Groq", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        BrainSetupCard { tick++ }
 
         Text("دسترسی اعلان‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Card(shape = RoundedCornerShape(22.dp)) {
@@ -536,8 +499,8 @@ private fun SettingsScreen() {
 
         Text("رفتار Share", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         SettingsSwitch(
-            "ارسال زنده به ChatGPT",
-            "وقتی از اینستاگرام یا برنامه دیگری چیزی Share می‌کنی، مستقیم به ChatGPT حساب خودت تحویل داده شود.",
+            "تحلیل مستقیم Share در همیشه‌یار",
+            "وقتی محتوایی Share می‌کنی، همیشه‌یار در همان برنامه و با کلیدهای خودت آن را بررسی کند.",
             liveShare
         ) {
             liveShare = it
@@ -585,11 +548,12 @@ private fun SettingsScreen() {
             title = { Text("حریم خصوصی همیشه‌یار") },
             text = {
                 Text(
-                    "• همیشه‌یار API Key شما را نمی‌خواهد و حساب ChatGPT را داخل خودش لاگین نمی‌کند.\n" +
-                        "• ورود و استفاده از مدل داخل اپ رسمی ChatGPT انجام می‌شود.\n" +
-                        "• متن‌های Share شده و تاریخچه صندوق برای امکانات همیشه‌یار روی گوشی ذخیره می‌شوند.\n" +
-                        "• پاسخ ChatGPT به‌صورت رسمی به همیشه‌یار برگردانده نمی‌شود؛ پاسخ را داخل ChatGPT می‌بینی.\n" +
-                        "• دسترسی اعلان‌ها فقط برای برنامه‌هایی است که خودت روشن کرده‌ای."
+                    "• کلیدهای شخصی Gemini و Groq با Android Keystore رمزگذاری و روی همین گوشی نگهداری می‌شوند.\\n" +
+                    "• متن‌ها و رسانه‌های انتخاب‌شده برای بررسی به سرویس‌های شخص ثالث Gemini/Groq فرستاده می‌شوند.\\n" +
+                    "• فایل ویدیو در صورت پشتیبانی برای تحلیل موقتاً در Gemini آپلود و بعد درخواست حذف آن ارسال می‌شود.\\n" +
+                    "• تاریخچه چت و صندوق داخل گوشی ذخیره می‌شود.\\n" +
+                    "• سهمیه رایگان محدود است و API ممکن است هزینه داشته باشد.\\n" +
+                    "• همیشه‌یار بدون اجازه به پیام‌ها و رسانه‌های خصوصی برنامه‌های دیگر دسترسی ندارد."
                 )
             }
         )
