@@ -55,7 +55,7 @@ object LocalGateway : BrainGateway {
             if (media != null) {
                 if (!media.isFile || media.length() !in 1..MAX_MEDIA_BYTES)
                     throw BrainFailure(413, "فایل ویدیو معتبر نیست یا بیشتر از ۲۴ مگابایت است.")
-                status("آپلود موقت ویدیوی واقعی در Gemini…")
+                status("آپلود موقت رسانه واقعی در Gemini…")
                 val file = upload(g, media)
                 try {
                     status("Gemini دارد تصویر و صدای ویدیو را تحلیل می‌کند…")
@@ -66,7 +66,7 @@ object LocalGateway : BrainGateway {
                         if (audio != null) try { transcribe(q, audio) } finally { audio.delete() } else ""
                     } catch (_: Exception) { "" }
                     val instruction = "نقش تو بازبین محتوای همیشه‌یار است؛ پاسخ نهایی یکپارچه فارسی بده. توافق مدل‌ها اثبات واقعی بودن ادعا نیست. بدون شواهد مستقل ادعای تأیید صحت نکن.\nپرسش: " +
-                        input + "\nخلاصه Gemini از ویدیو: " + visual +
+                        input + "\nخلاصه Gemini از رسانه: " + visual +
                         (if (speech.isBlank()) "" else "\nمتن صدا که Groq استخراج کرده: " + speech.take(10000))
                     val reviewed = try { groq(q, instruction, GROQ_REVIEW) } catch (_: IOException) {
                         "محتوای مشاهده‌شده توسط Gemini:\n" + visual + "\n\nبازبینی Groq در دسترس نبود؛ صحت ادعاها مستقل تأیید نشده است."
@@ -123,6 +123,9 @@ object LocalGateway : BrainGateway {
     private fun upload(key: String, media: File): Triple<String, String, String> {
         val mime = when (media.extension.lowercase()) {
             "webm" -> "video/webm"
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "webp" -> "image/webp"
             "mov" -> "video/quicktime"
             else -> "video/mp4"
         }
