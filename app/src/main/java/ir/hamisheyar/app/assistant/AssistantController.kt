@@ -58,7 +58,7 @@ object AssistantController {
 
         return AssistantResult(
             text = "دارم با مغز همیشه‌یار بررسی می‌کنم…",
-            action = AssistantAction.OPEN_CHATGPT,
+            action = AssistantAction.ASK_BRAIN,
             externalPrompt = rawInput.trim()
         )
     }
