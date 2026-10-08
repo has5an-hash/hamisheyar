@@ -79,31 +79,30 @@ object MediaIntake {
         if (!conn.contentType.orEmpty().lowercase().startsWith("video/")) return null
         if (conn.contentLengthLong > LIMIT) return null
         val temp = File(context.cacheDir, "public_video_" + System.nanoTime() + ".mp4")
+        var valid = false
         try {
             conn.inputStream.use { input ->
                 temp.outputStream().use { output ->
                     val buf = ByteArray(32768)
                     var total = 0L
                     while (true) {
-                        val read = input.read(buf)
-                        if (read < 0) break
-                        total += read
+                        val bytes = input.read(buf)
+                        if (bytes < 0) break
+                        total += bytes
                         if (total > LIMIT) return null
-                        output.write(buf, 0, read)
+                        output.write(buf, 0, bytes)
                     }
                 }
             }
             if (temp.length() < 16) return null
             val header = ByteArray(12)
             temp.inputStream().use { it.read(header) }
-            if (String(header, 4, 4) != "ftyp") return null
-            return temp
+            valid = String(header, 4, 4) == "ftyp"
+            return if (valid) temp else null
         } catch (_: Exception) {
             return null
         } finally {
-            if (!temp.exists() || temp.length() < 16 ||
-                runCatching { temp.inputStream().use { i -> i.skip(4); String(i.readNBytes(4)) != "ftyp" } }.getOrDefault(true))
-                temp.delete()
+            if (!valid) temp.delete()
         }
     }
 }
