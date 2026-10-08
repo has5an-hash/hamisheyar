@@ -53,7 +53,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import ir.hamisheyar.app.chatgpt.ChatGptBridge
+import ir.hamisheyar.app.brain.CredentialVault
+import ir.hamisheyar.app.brain.BrainSetupCard
 import ir.hamisheyar.app.service.FloatingAssistantService
 import ir.hamisheyar.app.system.AccessManager
 
@@ -74,10 +75,10 @@ fun ProfessionalHomeScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val chatGptInstalled = remember(tick) { ChatGptBridge.isInstalled(context) }
+    val brainReady = remember(tick) { CredentialVault.ready(context) }
     val notification = remember(tick) { AccessManager.notificationAccessState(context) }
     val overlay = remember(tick) { Settings.canDrawOverlays(context) }
-    val readyCount = listOf(chatGptInstalled, notification.granted, overlay).count { it }
+    val readyCount = listOf(brainReady, notification.granted, overlay).count { it }
 
     LazyColumn(
         modifier = Modifier
@@ -132,7 +133,7 @@ fun ProfessionalHomeScreen(
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 Text(
-                                    "مغز آنلاین با حساب ChatGPT خودت",
+                                    "مغز مستقل با Gemini + Groq",
                                     color = Color.White.copy(alpha = 0.84f),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
@@ -198,9 +199,9 @@ fun ProfessionalHomeScreen(
                 DashboardMetric(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Rounded.SmartToy,
-                    title = "ChatGPT",
-                    value = if (chatGptInstalled) "نصب و آماده" else "نیاز به نصب",
-                    ready = chatGptInstalled
+                    title = "مغز هوشمند",
+                    value = if (brainReady) "فعال" else "نیاز به اتصال هر دو",
+                    ready = brainReady
                 )
                 DashboardMetric(
                     modifier = Modifier.weight(1f),
@@ -232,29 +233,8 @@ fun ProfessionalHomeScreen(
             )
         }
 
-        if (!chatGptInstalled) {
-            item {
-                SetupActionCard(
-                    icon = Icons.Rounded.SmartToy,
-                    title = "اپ رسمی ChatGPT",
-                    description = "ChatGPT را نصب کن و داخل خودش با حساب خودت وارد شو. همیشه‌یار رمز یا API Key نمی‌گیرد.",
-                    button = "نصب ChatGPT"
-                ) {
-                    ChatGptBridge.openInstallPage(context)
-                }
-            }
-        } else {
-            item {
-                SetupActionCard(
-                    icon = Icons.Rounded.SmartToy,
-                    title = "حساب ChatGPT خودت",
-                    description = "مدل و سهمیه داخل خود ChatGPT مدیریت می‌شود؛ همیشه‌یار فقط درخواست را تحویل می‌دهد.",
-                    button = "باز کردن ChatGPT",
-                    ready = true
-                ) {
-                    ChatGptBridge.openApp(context)
-                }
-            }
+        item {
+            BrainSetupCard { tick++ }
         }
 
         if (!notification.granted) {
@@ -323,7 +303,7 @@ fun ProfessionalHomeScreen(
                     Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.secondary)
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        "بدون مدل محلی، بدون دانلود چندصد مگابایتی و بدون API Key؛ ورود و هوش مصنوعی داخل حساب ChatGPT خود کاربر می‌ماند.",
+                        "بدون سرور اختصاصی؛ کلیدهای شخصی کاربر به‌صورت رمزگذاری‌شده روی گوشی ذخیره می‌شوند و همیشه‌یار مستقیماً به Gemini و Groq وصل می‌شود.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
