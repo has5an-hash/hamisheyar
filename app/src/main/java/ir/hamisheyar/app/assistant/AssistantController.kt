@@ -8,7 +8,7 @@ enum class AssistantAction {
     NONE,
     START_VOICE_NOTE,
     STOP_AND_SHARE_VOICE,
-    OPEN_CHATGPT
+    ASK_BRAIN
 }
 
 data class AssistantResult(
@@ -42,7 +42,7 @@ object AssistantController {
 
         if (input.contains("با ویس") && (input.contains("جواب") || input.contains("پیام"))) {
             return AssistantResult(
-                "باشه؛ حالت ویس ChatGPT را باز می‌کنم.",
+                "حالت گفتار همیشه‌یار را باز می‌کنم.",
                 AssistantAction.START_VOICE_NOTE
             )
         }
@@ -57,8 +57,8 @@ object AssistantController {
         }
 
         return AssistantResult(
-            text = "این درخواست را با حساب ChatGPT خودت باز می‌کنم.",
-            action = AssistantAction.OPEN_CHATGPT,
+            text = "دارم پاسخ را داخل همیشه‌یار آماده می‌کنم.",
+            action = AssistantAction.ASK_BRAIN,
             externalPrompt = rawInput.trim()
         )
     }
