@@ -26,6 +26,14 @@ object AgentBrain {
         val prepared = withContext(Dispatchers.IO) {
             MediaIntake.prepare(context, prompt, mediaPath)
         }
+        val refersToUnsharedMedia = listOf("این ویدیو", "این ریل", "این عکس", "این فیلم",
+            "همین ویدیو", "این پست").any { prompt.contains(it, ignoreCase = true) }
+        if (refersToUnsharedMedia && prepared.images.isEmpty() &&
+            mediaPath.isNullOrBlank() && !prompt.contains("https://", ignoreCase = true)) {
+            return "برای اینکه درباره این ویدیو یا عکس دقیق نظر بدهم، باید خود محتوایش را دریافت کنم. " +
+                "از داخل برنامه اصلی گزینه Share و سپس همیشه‌یار را انتخاب کن، یا فایل رسانه را بفرست. " +
+                "صرف بازبودن حباب روی اینستاگرام دسترسی به محتوای ویدیو نمی‌دهد."
+        }
         val containsLink = prompt.contains("https://", ignoreCase = true)
         if (containsLink && !prepared.videoSampled && prepared.images.isEmpty() &&
             mediaPath.isNullOrBlank()) {
