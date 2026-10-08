@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [ "main", "feature/chatgpt-free-bridge" ]
+    branches: [ "main", "feature/chatgpt-free-bridge", "feature/agentic-brain-android-v050" ]
   workflow_dispatch:
 
 permissions:
@@ -55,13 +55,13 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/hamisheyar-badging.txt
           grep -q "package: name='ir.hamisheyar.app'" /tmp/hamisheyar-badging.txt
-          grep -q "versionCode='6'" /tmp/hamisheyar-badging.txt
-          grep -q "versionName='0.4.0'" /tmp/hamisheyar-badging.txt
+          grep -q "versionCode='7'" /tmp/hamisheyar-badging.txt
+          grep -q "versionName='0.5.0'" /tmp/hamisheyar-badging.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: hamisheyar-0.4.0-debug-apk
+          name: hamisheyar-0.5.0-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
