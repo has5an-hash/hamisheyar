@@ -128,6 +128,8 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         incomingShare.value = intent.getStringExtra(EXTRA_INCOMING_SHARE)
         openVoice.value = intent.getBooleanExtra(EXTRA_OPEN_VOICE, false)
+        incomingMedia.value = intent.getStringExtra(EXTRA_MEDIA_PATH)
+        incomingAutoRun.value = intent.getBooleanExtra(EXTRA_AUTO_ANALYZE, false)
     }
 
     override fun onResume() {

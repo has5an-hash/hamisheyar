@@ -145,7 +145,16 @@ object MediaIntake {
         var conn = openUrl(startingUrl.toString())
         var type = conn.contentType.orEmpty().lowercase()
         if (type.contains("html")) {
-            val html = conn.inputStream.use { it.readNBytes(800_000).toString(Charsets.UTF_8) }
+            val html = conn.inputStream.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val bytes = ByteArray(8192)
+                while (output.size() < 800_000) {
+                    val read = input.read(bytes, 0, minOf(bytes.size, 800_000 - output.size()))
+                    if (read < 0) break
+                    output.write(bytes, 0, read)
+                }
+                String(output.toByteArray(), Charsets.UTF_8)
+            }
             conn.disconnect()
             // Not every Instagram page exposes a public video URL; do not bypass login or DRM.
             val meta = Regex(
