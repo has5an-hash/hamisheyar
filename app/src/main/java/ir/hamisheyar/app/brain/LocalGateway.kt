@@ -23,8 +23,8 @@ interface BrainGateway {
 class LocalGateway : BrainGateway {
     companion object {
         const val GEMINI_MODEL = "gemini-3.8-flash"
-        const val GROQ_FAST = "llama-3.1-8b-instant"
-        const val GROQ_STRONG = "llama-3.3-70b-versatile"
+        const val GROQ_FAST = "openai/gpt-oss-20b"
+        const val GROQ_STRONG = "openai/gpt-oss-120b"
         const val GROQ_WHISPER = "whisper-large-v3-turbo"
     }
 
