@@ -192,7 +192,7 @@ object LocalGateway : BrainGateway {
                 val size = extractor.readSampleData(data, 0)
                 if (size < 0) break
                 info.offset = 0; info.size = size; info.presentationTimeUs = extractor.sampleTime
-                info.flags = extractor.sampleFlags
+                info.flags = if (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
                 muxer.writeSampleData(outputTrack, data, info)
                 extractor.advance()
             }
