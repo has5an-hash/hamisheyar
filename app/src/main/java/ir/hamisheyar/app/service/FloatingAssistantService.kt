@@ -28,7 +28,10 @@ import ir.hamisheyar.app.MainActivity
 import ir.hamisheyar.app.R
 import ir.hamisheyar.app.assistant.AssistantAction
 import ir.hamisheyar.app.assistant.AssistantController
-import ir.hamisheyar.app.chatgpt.ChatGptBridge
+import ir.hamisheyar.app.brain.LocalGateway
+import ir.hamisheyar.app.brain.CredentialVault
+import android.os.Handler
+import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -294,12 +297,22 @@ class FloatingAssistantService : Service() {
             when (result.action) {
                 AssistantAction.START_VOICE_NOTE -> startVoiceNote()
                 AssistantAction.STOP_AND_SHARE_VOICE -> stopVoiceNoteAndShare()
-                AssistantAction.OPEN_CHATGPT -> {
-                    val launch = ChatGptBridge.sendPrompt(
-                        this@FloatingAssistantService,
-                        result.externalPrompt ?: value
-                    )
-                    panelStatus?.text = launch.message
+                AssistantAction.ASK_BRAIN -> {
+                    if (!CredentialVault.ready(this@FloatingAssistantService)) {
+                        panelStatus?.text = "برای اتصال Gemini و Groq بخش تنظیمات همیشه‌یار را باز کن."
+                    } else {
+                        try {
+                            val answer = LocalGateway.answer(
+                                this@FloatingAssistantService,
+                                result.externalPrompt ?: value
+                            ) { stage ->
+                                Handler(Looper.getMainLooper()).post { panelStatus?.text = stage }
+                            }
+                            panelStatus?.text = answer.text
+                        } catch (error: Exception) {
+                            panelStatus?.text = "نتوانستم پاسخ بدهم: " + (error.message ?: "مشکل اتصال")
+                        }
+                    }
                 }
                 AssistantAction.NONE -> Unit
             }
