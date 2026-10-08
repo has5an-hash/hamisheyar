@@ -89,6 +89,10 @@ import ir.hamisheyar.app.system.AccessManager
 import ir.hamisheyar.app.ui.HamisheyarTheme
 import ir.hamisheyar.app.ui.ProfessionalHomeScreen
 import ir.hamisheyar.app.ui.VoiceScreen
+import ir.hamisheyar.app.ui.AgenticHomeScreen
+import ir.hamisheyar.app.ui.AgenticChatScreen
+import ir.hamisheyar.app.ui.AgenticVoiceScreen
+import ir.hamisheyar.app.ui.AgenticSettingsScreen
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -97,19 +101,23 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     private val incomingShare = mutableStateOf<String?>(null)
     private val openVoice = mutableStateOf(false)
+    private val incomingMedia = mutableStateOf<String?>(null)
+    private val incomingAutoRun = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         incomingShare.value = intent.getStringExtra(EXTRA_INCOMING_SHARE)
         openVoice.value = intent.getBooleanExtra(EXTRA_OPEN_VOICE, false)
+        incomingMedia.value = intent.getStringExtra(EXTRA_MEDIA_PATH)
+        incomingAutoRun.value = intent.getBooleanExtra(EXTRA_AUTO_ANALYZE, false)
 
         setContent {
             HamisheyarTheme {
                 androidx.compose.runtime.CompositionLocalProvider(
                     LocalLayoutDirection provides LayoutDirection.Rtl
                 ) {
-                    HamisheyarRoot(incomingShare.value, openVoice.value)
+                    HamisheyarRoot(incomingShare.value, openVoice.value, incomingMedia.value, incomingAutoRun.value)
                 }
             }
         }
@@ -120,6 +128,8 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         incomingShare.value = intent.getStringExtra(EXTRA_INCOMING_SHARE)
         openVoice.value = intent.getBooleanExtra(EXTRA_OPEN_VOICE, false)
+        incomingMedia.value = intent.getStringExtra(EXTRA_MEDIA_PATH)
+        incomingAutoRun.value = intent.getBooleanExtra(EXTRA_AUTO_ANALYZE, false)
     }
 
     override fun onResume() {
@@ -133,6 +143,8 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_INCOMING_SHARE = "incoming_share"
         const val EXTRA_OPEN_VOICE = "open_voice"
+        const val EXTRA_MEDIA_PATH = "incoming_media_path"
+        const val EXTRA_AUTO_ANALYZE = "incoming_auto_analyze"
     }
 }
 
@@ -146,7 +158,7 @@ private enum class MainTab(val title: String, val icon: ImageVector) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HamisheyarRoot(incomingShare: String?, openVoice: Boolean) {
+private fun HamisheyarRoot(incomingShare: String?, openVoice: Boolean, incomingMedia: String?, autoAnalyze: Boolean) {
     var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
 
     LaunchedEffect(incomingShare) {
@@ -163,7 +175,7 @@ private fun HamisheyarRoot(incomingShare: String?, openVoice: Boolean) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("همیشه‌یار", fontWeight = FontWeight.ExtraBold)
                         Text(
-                            "پل شخصی شما به ChatGPT",
+                            "مغز عامل‌محور Gemini + Groq",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -190,14 +202,15 @@ private fun HamisheyarRoot(incomingShare: String?, openVoice: Boolean) {
                 .padding(inner)
         ) {
             when (tab) {
-                MainTab.HOME -> ProfessionalHomeScreen(
-                    onOpenChat = { tab = MainTab.CHAT },
-                    onOpenVoice = { tab = MainTab.VOICE }
+                MainTab.HOME -> AgenticHomeScreen(
+                    onChat = { tab = MainTab.CHAT },
+                    onVoice = { tab = MainTab.VOICE },
+                    onSettings = { tab = MainTab.SETTINGS }
                 )
-                MainTab.CHAT -> ChatScreen(incomingShare)
-                MainTab.VOICE -> VoiceScreen()
+                MainTab.CHAT -> AgenticChatScreen(incomingShare, incomingMedia, autoAnalyze)
+                MainTab.VOICE -> AgenticVoiceScreen()
                 MainTab.INBOX -> InboxScreen()
-                MainTab.SETTINGS -> SettingsScreen()
+                MainTab.SETTINGS -> AgenticSettingsScreen()
             }
         }
     }

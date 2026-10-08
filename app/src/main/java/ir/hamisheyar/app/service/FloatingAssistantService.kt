@@ -28,7 +28,7 @@ import ir.hamisheyar.app.MainActivity
 import ir.hamisheyar.app.R
 import ir.hamisheyar.app.assistant.AssistantAction
 import ir.hamisheyar.app.assistant.AssistantController
-import ir.hamisheyar.app.chatgpt.ChatGptBridge
+import ir.hamisheyar.app.brain.AgentBrain
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -294,12 +294,13 @@ class FloatingAssistantService : Service() {
             when (result.action) {
                 AssistantAction.START_VOICE_NOTE -> startVoiceNote()
                 AssistantAction.STOP_AND_SHARE_VOICE -> stopVoiceNoteAndShare()
-                AssistantAction.OPEN_CHATGPT -> {
-                    val launch = ChatGptBridge.sendPrompt(
-                        this@FloatingAssistantService,
-                        result.externalPrompt ?: value
-                    )
-                    panelStatus?.text = launch.message
+                AssistantAction.ASK_BRAIN -> {
+                    panelStatus?.text = try {
+                        AgentBrain.answer(this@FloatingAssistantService,
+                            result.externalPrompt ?: value) { progress -> panelStatus?.text = progress }
+                    } catch (ex: Exception) {
+                        "درخواست کامل نشد: " + (ex.message ?: "خطای اتصال")
+                    }
                 }
                 AssistantAction.NONE -> Unit
             }

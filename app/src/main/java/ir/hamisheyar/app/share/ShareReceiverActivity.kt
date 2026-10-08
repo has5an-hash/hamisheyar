@@ -8,7 +8,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import ir.hamisheyar.app.MainActivity
-import ir.hamisheyar.app.chatgpt.ChatGptBridge
 import ir.hamisheyar.app.data.LocalStore
 import ir.hamisheyar.app.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
@@ -16,27 +15,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/** Receives only Android-granted share data. Never opens a third-party AI app. */
 class ShareReceiverActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (intent?.action != Intent.ACTION_SEND) {
-            finish()
-            return
-        }
-
+        if (intent?.action != Intent.ACTION_SEND) { finish(); return }
         lifecycleScope.launch {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
             @Suppress("DEPRECATION")
             val stream = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
-            val mime = intent.type.orEmpty()
-            val copied = if (stream != null) copyIntoApp(stream, mime) else null
-
+            val copied = if (stream != null) copyIntoApp(stream, intent.type.orEmpty()) else null
             val body = when {
                 text.isNotBlank() -> text
-                copied != null -> "فایل به اشتراک گذاشته‌شده: ${copied.name}"
+                copied != null -> "رسانه اشتراک‌گذاری‌شده: " + copied.name
                 else -> "مورد به اشتراک گذاشته‌شده"
             }
-
             LocalStore(this@ShareReceiverActivity).addEvent(
                 source = "اشتراک‌گذاری",
                 sender = "از برنامه دیگر",
@@ -45,53 +38,43 @@ class ShareReceiverActivity : ComponentActivity() {
                 kind = "shared",
                 sharedUri = copied?.absolutePath
             )
-
-            if (AppSettings.liveShareEnabled(this@ShareReceiverActivity)) {
-                val prompt = buildString {
-                    append("این مورد را که از یک برنامه دیگر برای همیشه‌یار فرستادم بررسی کن. ")
-                    append("محتوا را توضیح بده، نکات مهمش را بگو و اگر ادعا، لینک یا پیشنهاد مشکوکی دارد هشدار بده.")
-                    if (text.isNotBlank()) {
-                        append("\n\n")
-                        append(text)
-                    }
-                }
-
-                val result = ChatGptBridge.forwardContent(
-                    this@ShareReceiverActivity,
-                    prompt,
-                    stream,
-                    mime
-                )
-                Toast.makeText(this@ShareReceiverActivity, result.message, Toast.LENGTH_LONG).show()
-
-                if (!result.launched) {
-                    startActivity(Intent(this@ShareReceiverActivity, MainActivity::class.java).apply {
-                        putExtra(MainActivity.EXTRA_INCOMING_SHARE, body)
-                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    })
-                }
-            } else {
-                Toast.makeText(
-                    this@ShareReceiverActivity,
-                    "برای بعد داخل صف همیشه‌یار ذخیره شد.",
-                    Toast.LENGTH_SHORT
-                ).show()
+            val live = AppSettings.liveShareEnabled(this@ShareReceiverActivity)
+            if (!live) {
+                Toast.makeText(this@ShareReceiverActivity,
+                    "در صف همیشه‌یار ذخیره شد.", Toast.LENGTH_SHORT).show()
+                finish()
+                return@launch
             }
+            startActivity(Intent(this@ShareReceiverActivity, MainActivity::class.java).apply {
+                putExtra(MainActivity.EXTRA_INCOMING_SHARE, body)
+                if (copied != null) putExtra(MainActivity.EXTRA_MEDIA_PATH, copied.absolutePath)
+                putExtra(MainActivity.EXTRA_AUTO_ANALYZE, live)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            })
             finish()
         }
     }
 
     private suspend fun copyIntoApp(uri: Uri, mime: String): File? = withContext(Dispatchers.IO) {
         runCatching {
-            val dir = File(filesDir, "shared").apply { mkdirs() }
             val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
-                ?.takeIf { it.length <= 8 }
-                ?: "bin"
-            val file = File(dir, "shared_${System.currentTimeMillis()}.$ext")
+                ?.takeIf { it.length in 1..8 } ?: "bin"
+            val dir = File(filesDir, "shared").apply { mkdirs() }
+            val file = File(dir, "shared_" + System.currentTimeMillis() + "." + ext)
+            var total = 0L
             contentResolver.openInputStream(uri)?.use { input ->
-                file.outputStream().use { output -> input.copyTo(output) }
+                file.outputStream().use { output ->
+                    val buffer = ByteArray(16_384)
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        total += n
+                        if (total > 30_000_000) error("حداکثر اندازه فایل ۳۰ مگابایت است.")
+                        output.write(buffer, 0, n)
+                    }
+                }
             } ?: return@runCatching null
-            file
+            if (file.length() == 0L) { file.delete(); null } else file
         }.getOrNull()
     }
 }
