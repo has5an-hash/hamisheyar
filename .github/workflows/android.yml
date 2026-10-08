@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -65,3 +65,17 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish test APK as GitHub pre-release
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Hamisheyar-0.5.0-agentic-test.apk
+          TAG="v0.5.0-agentic-test"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Hamisheyar-0.5.0-agentic-test.apk --clobber
+          else
+            gh release create "$TAG" Hamisheyar-0.5.0-agentic-test.apk --target "$GITHUB_SHA" --title "Hamisheyar 0.5.0 Agentic Test" --notes "Android test APK. Gemini and Groq BYOK are both required. No Hamisheyar server. Not production-signed; device validation still required." --prerelease
+          fi
