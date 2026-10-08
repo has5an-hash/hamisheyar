@@ -8,7 +8,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import ir.hamisheyar.app.MainActivity
-import ir.hamisheyar.app.chatgpt.ChatGptBridge
 import ir.hamisheyar.app.data.LocalStore
 import ir.hamisheyar.app.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
@@ -47,29 +46,12 @@ class ShareReceiverActivity : ComponentActivity() {
             )
 
             if (AppSettings.liveShareEnabled(this@ShareReceiverActivity)) {
-                val prompt = buildString {
-                    append("این مورد را که از یک برنامه دیگر برای همیشه‌یار فرستادم بررسی کن. ")
-                    append("محتوا را توضیح بده، نکات مهمش را بگو و اگر ادعا، لینک یا پیشنهاد مشکوکی دارد هشدار بده.")
-                    if (text.isNotBlank()) {
-                        append("\n\n")
-                        append(text)
-                    }
-                }
-
-                val result = ChatGptBridge.forwardContent(
-                    this@ShareReceiverActivity,
-                    prompt,
-                    stream,
-                    mime
-                )
-                Toast.makeText(this@ShareReceiverActivity, result.message, Toast.LENGTH_LONG).show()
-
-                if (!result.launched) {
-                    startActivity(Intent(this@ShareReceiverActivity, MainActivity::class.java).apply {
-                        putExtra(MainActivity.EXTRA_INCOMING_SHARE, body)
-                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    })
-                }
+                startActivity(Intent(this@ShareReceiverActivity, MainActivity::class.java).apply {
+                    putExtra(MainActivity.EXTRA_INCOMING_SHARE, body)
+                    if (copied != null) putExtra(MainActivity.EXTRA_INCOMING_PATH, copied.absolutePath)
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+                Toast.makeText(this@ShareReceiverActivity, "در همیشه‌یار آماده بررسی است.", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(
                     this@ShareReceiverActivity,
@@ -89,7 +71,11 @@ class ShareReceiverActivity : ComponentActivity() {
                 ?: "bin"
             val file = File(dir, "shared_${System.currentTimeMillis()}.$ext")
             contentResolver.openInputStream(uri)?.use { input ->
-                file.outputStream().use { output -> input.copyTo(output) }
+                file.outputStream().use { output -> input.copyTo(output, 32 * 1024)
+                    if (file.length() > 24L * 1024 * 1024) {
+                        file.delete()
+                        throw IllegalArgumentException("فایل بزرگ‌تر از ۲۴ مگابایت است")
+                    } }
             } ?: return@runCatching null
             file
         }.getOrNull()
