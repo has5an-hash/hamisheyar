@@ -14,17 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Print engine lifecycle and settings
+      - name: Print decision model and telegram settings
         shell: bash
         run: |
           set -euo pipefail
           rm -rf /tmp/pumpbot && mkdir -p /tmp/pumpbot
           unzip -q Developersia-Pump-Hunter-v1.0.0.zip -d /tmp/pumpbot
-          echo "===== engine.php 275-430 ====="
-          nl -ba /tmp/pumpbot/pumpbot/app/engine.php | sed -n '275,430p'
+          echo "===== engine.php 130-275 ====="
+          nl -ba /tmp/pumpbot/pumpbot/app/engine.php | sed -n '130,275p'
           echo "===== settings.php ====="
-          nl -ba /tmp/pumpbot/pumpbot/settings.php | sed -n '1,280p'
-          echo "===== common.php 110-135 ====="
-          nl -ba /tmp/pumpbot/pumpbot/app/common.php | sed -n '110,135p'
-          echo "===== storage defaults and install ====="
-          grep -n -C 3 -E 'storage|state.json|trades.jsonl|daily.json|initial_toman|telegram_' /tmp/pumpbot/pumpbot/install.php
+          nl -ba /tmp/pumpbot/pumpbot/settings.php | sed -n '1,260p'
+          echo "===== install.php storage/config ====="
+          grep -n -C 2 -E 'storage|initial_toman|telegram_|trade_fee|config =' /tmp/pumpbot/pumpbot/install.php || true
+          echo "===== index decision display ====="
+          grep -n -C 3 -E 'decisions|decision|reason|skip' /tmp/pumpbot/pumpbot/index.php
