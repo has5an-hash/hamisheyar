@@ -1,0 +1,26 @@
+name: Inspect Pump Hunter ZIP
+
+on:
+  push:
+    branches: [ "inspect-pumpbot-zip" ]
+    paths:
+      - ".github/workflows/inspect-pumpbot.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect bundled PHP source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pumpbot
+          unzip -q Developersia-Pump-Hunter-v1.0.0.zip -d /tmp/pumpbot
+          echo "=== PHP FILES ==="
+          find /tmp/pumpbot -type f -name '*.php' -print | sort
+          echo "=== CURRENCY / API / TELEGRAM REFERENCES ==="
+          grep -RniE -C 5 'nobitex|USDT|toman|rial|ریال|تومان|telegram|sendMessage|bot_token|chat_id|chatId' /tmp/pumpbot --include='*.php' || true
