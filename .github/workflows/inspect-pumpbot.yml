@@ -14,19 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Print exact PHP source sections
+      - name: Print engine lifecycle and settings
         shell: bash
         run: |
           set -euo pipefail
           rm -rf /tmp/pumpbot && mkdir -p /tmp/pumpbot
           unzip -q Developersia-Pump-Hunter-v1.0.0.zip -d /tmp/pumpbot
-          echo "===== app/common.php ====="
-          nl -ba /tmp/pumpbot/pumpbot/app/common.php | sed -n '1,260p'
-          echo "===== app/engine.php lines 1-170 ====="
-          nl -ba /tmp/pumpbot/pumpbot/app/engine.php | sed -n '1,170p'
-          echo "===== app/engine.php lines 270-430 ====="
-          nl -ba /tmp/pumpbot/pumpbot/app/engine.php | sed -n '270,430p'
-          echo "===== cron.php ====="
-          nl -ba /tmp/pumpbot/pumpbot/cron.php | sed -n '1,200p'
-          echo "===== settings.php telegram config ====="
-          grep -n -C 4 -E 'telegram|chat_id|bot_token|initial_toman|conversion' /tmp/pumpbot/pumpbot/settings.php
+          echo "===== engine.php 275-430 ====="
+          nl -ba /tmp/pumpbot/pumpbot/app/engine.php | sed -n '275,430p'
+          echo "===== settings.php ====="
+          nl -ba /tmp/pumpbot/pumpbot/settings.php | sed -n '1,280p'
+          echo "===== common.php 110-135 ====="
+          nl -ba /tmp/pumpbot/pumpbot/app/common.php | sed -n '110,135p'
+          echo "===== storage defaults and install ====="
+          grep -n -C 3 -E 'storage|state.json|trades.jsonl|daily.json|initial_toman|telegram_' /tmp/pumpbot/pumpbot/install.php
