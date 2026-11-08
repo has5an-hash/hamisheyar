@@ -1,0 +1,233 @@
+name: Build Pump Hunter currency and Telegram patch
+
+on:
+  push:
+    branches: [ "inspect-pumpbot-zip" ]
+    paths:
+      - ".github/workflows/build-pumpbot-patch.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP 8.1
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.1"
+          tools: none
+      - name: Extract and patch engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pumpbot patch
+          mkdir -p /tmp/pumpbot patch/pumpbot/app
+          unzip -q Developersia-Pump-Hunter-v1.0.0.zip -d /tmp/pumpbot
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("/tmp/pumpbot/pumpbot/app/engine.php")
+          s = p.read_text(encoding="utf-8")
+
+          old_fx = """function get_usdt_irt_rate(): array {
+              $r = http_json('https://apiv2.nobitex.ir/v3/orderbook/USDTIRT', [], 6);
+              if (!$r['ok']) return $r;
+              $data = $r['data'];
+              $ask = isset($data['asks'][0][0]) ? (float)$data['asks'][0][0] : 0.0;
+              $bid = isset($data['bids'][0][0]) ? (float)$data['bids'][0][0] : 0.0;
+              if (($data['status'] ?? '') !== 'ok' || $ask <= 0 || $bid <= 0) return ['ok'=>false, 'error'=>'نرخ معتبر USDTIRT از نوبیتکس دریافت نشد.'];
+              return ['ok'=>true, 'ask'=>$ask, 'bid'=>$bid, 'last'=>(float)($data['lastTradePrice'] ?? 0), 'at'=>date('c')];
+          }"""
+          new_fx = """function get_usdt_irt_rate(): array {
+              $r = http_json('https://apiv2.nobitex.ir/v3/orderbook/USDTIRT', [], 6);
+              if (!$r['ok']) return $r;
+              $data = $r['data'];
+
+              // Nobitex USDTIRT order-book prices are in IRR (Rial).
+              // The whole Paper Trading engine stores and displays fiat values in Toman.
+              $askIrr = isset($data['asks'][0][0]) ? (float)$data['asks'][0][0] : 0.0;
+              $bidIrr = isset($data['bids'][0][0]) ? (float)$data['bids'][0][0] : 0.0;
+              $lastIrr = (float)($data['lastTradePrice'] ?? 0);
+              if (($data['status'] ?? '') !== 'ok' || $askIrr <= 0 || $bidIrr <= 0) {
+                  return ['ok'=>false, 'error'=>'نرخ معتبر USDTIRT از نوبیتکس دریافت نشد.'];
+              }
+
+              return [
+                  'ok'=>true,
+                  'ask'=>$askIrr / 10.0,
+                  'bid'=>$bidIrr / 10.0,
+                  'last'=>$lastIrr / 10.0,
+                  'ask_irr'=>$askIrr,
+                  'bid_irr'=>$bidIrr,
+                  'unit'=>'TOMAN',
+                  'at'=>date('c')
+              ];
+          }"""
+          if old_fx not in s:
+              raise SystemExit("Could not locate exact get_usdt_irt_rate() block; refusing to patch.")
+          s = s.replace(old_fx, new_fx, 1)
+
+          old_state = """        $state = json_read('state.json', []);
+                  if (!$state) $state = ['initialized'=>false,'positions'=>[],'trades'=>[],'decisions'=>[],'closed_tokens'=>[],'cash_usdt'=>0.0];"""
+          new_state = """        $state = json_read('state.json', []);
+
+                  // One-time repair for accounts initialized with the old Rial-as-Toman bug.
+                  // Keep the old paper-trading records in timestamped backups, then restart
+                  // the virtual account from the configured Toman capital at the corrected rate.
+                  $legacyFxAsk = (float)($state['initial_fx_ask'] ?? 0);
+                  if (!empty($state['initialized']) && $legacyFxAsk >= 1000000 && $legacyFxAsk < 10000000) {
+                      $backupSuffix = date('Ymd_His');
+                      if (is_file(store_path('state.json'))) {
+                          @copy(store_path('state.json'), store_path('state_pre_toman_fix_' . $backupSuffix . '.json'));
+                      }
+                      foreach (['trades.jsonl','decisions.jsonl','daily.json'] as $legacyFile) {
+                          $legacyPath = store_path($legacyFile);
+                          if (is_file($legacyPath)) {
+                              $backupPath = store_path($legacyFile . '.pre_toman_fix_' . $backupSuffix);
+                              if (!@rename($legacyPath, $backupPath)) {
+                                  @copy($legacyPath, $backupPath);
+                                  @file_put_contents($legacyPath, '');
+                              }
+                          }
+                      }
+                      $state = ['initialized'=>false,'positions'=>[],'trades'=>[],'decisions'=>[],'closed_tokens'=>[],'cash_usdt'=>0.0];
+                      log_event('WARN', 'حساب آزمایشی قدیمی به‌دلیل اختلاف واحد ریال/تومان آرشیو و از نو مقداردهی شد.', ['old_initial_fx_ask'=>$legacyFxAsk,'backup_suffix'=>$backupSuffix]);
+                  }
+                  if (!$state) $state = ['initialized'=>false,'positions'=>[],'trades'=>[],'decisions'=>[],'closed_tokens'=>[],'cash_usdt'=>0.0];"""
+          if old_state not in s:
+              raise SystemExit("Could not locate exact state initialization block; refusing to patch.")
+          s = s.replace(old_state, new_state, 1)
+
+          old_market = """        $marketMap = [];
+                  $discovered = collect_candidate_mints();"""
+          new_market = """        $marketMap = [];
+                  $runDecisionRows = [];
+                  $closedThisRun = 0;
+                  $discovered = collect_candidate_mints();"""
+          if old_market not in s:
+              raise SystemExit("Could not locate market initialization block; refusing to patch.")
+          s = s.replace(old_market, new_market, 1)
+
+          old_close = """            if ($reason !== '') close_paper_position($state, $mint, $m, $reason, $config);"""
+          new_close = """            if ($reason !== '') {
+                          $closedTrade = close_paper_position($state, $mint, $m, $reason, $config);
+                          if ($closedTrade) $closedThisRun++;
+                      }"""
+          if old_close not in s:
+              raise SystemExit("Could not locate position close call; refusing to patch.")
+          s = s.replace(old_close, new_close, 1)
+
+          old_missing = """                $a = analyze_token($dummy); $a['blocks'][] = 'اطلاعات توکن از Jupiter دریافت نشد'; save_decision($state,$dummy,$a,'SKIP','داده بنیادی/امنیتی در دسترس نیست'); continue;"""
+          new_missing = """                $a = analyze_token($dummy);
+                          $a['blocks'][] = 'اطلاعات توکن از Jupiter دریافت نشد';
+                          save_decision($state,$dummy,$a,'SKIP','داده بنیادی/امنیتی در دسترس نیست');
+                          $runDecisionRows[] = $state['decisions'][$mint] ?? [];
+                          continue;"""
+          if old_missing not in s:
+              raise SystemExit("Could not locate missing-Jupiter decision call; refusing to patch.")
+          s = s.replace(old_missing, new_missing, 1)
+
+          old_decisions = """            if ($analysis['eligible']) {
+                          $eligibleCount++;
+                          $trade = open_paper_position($state,$market,$analysis,$config);
+                          if ($trade) { $bought++; save_decision($state,$market,$analysis,'BUY','خرید آزمایشی انجام شد؛ امتیاز و تمام فیلترها تأیید شدند.'); }
+                          else save_decision($state,$market,$analysis,'SKIP','اندازه معامله از حداقل مجاز کمتر بود.');
+                      } else {
+                          $reason = implode('؛ ', $analysis['blocks']);
+                          save_decision($state,$market,$analysis,'SKIP',$reason !== '' ? $reason : 'امتیاز کمتر از حد ورود است.');
+                      }"""
+          new_decisions = """            if ($analysis['eligible']) {
+                          $eligibleCount++;
+                          $trade = open_paper_position($state,$market,$analysis,$config);
+                          if ($trade) { $bought++; save_decision($state,$market,$analysis,'BUY','خرید آزمایشی انجام شد؛ امتیاز و تمام فیلترها تأیید شدند.'); }
+                          else save_decision($state,$market,$analysis,'SKIP','اندازه معامله از حداقل مجاز کمتر بود.');
+                      } else {
+                          $reason = implode('؛ ', $analysis['blocks']);
+                          save_decision($state,$market,$analysis,'SKIP',$reason !== '' ? $reason : 'امتیاز کمتر از حد ورود است.');
+                      }
+                      $runDecisionRows[] = $state['decisions'][$mint] ?? [];"""
+          if old_decisions not in s:
+              raise SystemExit("Could not locate candidate decision block; refusing to patch.")
+          s = s.replace(old_decisions, new_decisions, 1)
+
+          old_log = """        log_event('INFO','اجرای کران کامل شد',['duration'=>$state['last_run']['duration_seconds'],'candidates'=>count($candidates),'evaluated'=>$processed,'bought'=>$bought,'equity_usdt'=>$equity]);
+                  // One daily Telegram report near local midnight (23:55 or later)."""
+          new_log = """        log_event('INFO','اجرای کران کامل شد',['duration'=>$state['last_run']['duration_seconds'],'candidates'=>count($candidates),'evaluated'=>$processed,'bought'=>$bought,'equity_usdt'=>$equity]);
+
+                  // Send a compact Telegram report after EVERY successful analysis cycle.
+                  $skippedRows = array_values(array_filter($runDecisionRows, static function($row) {
+                      return ($row['action'] ?? '') === 'SKIP';
+                  }));
+                  $fxBidToman = (float)($state['latest_fx']['bid'] ?? 0);
+                  $equityToman = $fxBidToman > 0 ? $equity * $fxBidToman : 0.0;
+                  $initialToman = (float)($state['initial_toman'] ?? $config['initial_toman']);
+                  $pnlToman = $equityToman > 0 ? $equityToman - $initialToman : 0.0;
+                  $pnlUsdt = $equity - (float)($state['initial_usdt_net'] ?? 0);
+                  $pnlSignToman = $pnlToman >= 0 ? '+' : '';
+                  $pnlSignUsdt = $pnlUsdt >= 0 ? '+' : '';
+                  $runReport = "🔎 گزارش هر دور تحلیل ربات\n";
+                  $runReport .= "زمان: " . date('Y/m/d H:i:s') . "\n";
+                  $runReport .= "توکن‌های کاندید: " . count($candidates) . " | بررسی‌شده: {$processed}\n";
+                  $runReport .= "واجد شرایط: {$eligibleCount} | خرید فرضی: {$bought} | فروش فرضی: {$closedThisRun}\n";
+                  $runReport .= "ردشده/بدون ورود: " . count($skippedRows) . "\n";
+                  $runReport .= "موقعیت باز: " . count($state['positions']) . "\n";
+                  $runReport .= "موجودی نقد: $" . number_format((float)$state['cash_usdt'],4) . " USDT\n";
+                  $runReport .= "ارزش کل: $" . number_format($equity,4) . " USDT\n";
+                  $runReport .= "سود/زیان کل: {$pnlSignUsdt}$" . number_format($pnlUsdt,4) . " USDT";
+                  if ($equityToman > 0) {
+                      $runReport .= "\nارزش کل تومانی: " . number_format($equityToman,0) . " تومان";
+                      $runReport .= "\nسود/زیان تومانی: {$pnlSignToman}" . number_format($pnlToman,0) . " تومان";
+                      $runReport .= "\nنرخ فروش USDT: " . number_format($fxBidToman,0) . " تومان";
+                  } else {
+                      $runReport .= "\nنرخ تومان: فعلاً در دسترس نیست";
+                  }
+                  if ($skippedRows) {
+                      $runReport .= "\n\nدلایل نمونه عدم ورود:";
+                      foreach (array_slice($skippedRows, 0, 4) as $row) {
+                          $symbol = (string)($row['symbol'] ?? 'توکن نامشخص');
+                          $blocks = array_slice((array)($row['blocks'] ?? []), 0, 2);
+                          $why = $blocks ? implode('؛ ', $blocks) : (string)($row['reason'] ?? 'شرایط ورود تأیید نشد');
+                          $runReport .= "\n• {$symbol} (" . (int)($row['score'] ?? 0) . "/100): {$why}";
+                      }
+                  }
+                  telegram_send($config, $runReport);
+
+                  // One daily Telegram report near local midnight (23:55 or later)."""
+          if old_log not in s:
+              raise SystemExit("Could not locate end-of-cycle log/report block; refusing to patch.")
+          s = s.replace(old_log, new_log, 1)
+
+          p.write_text(s, encoding="utf-8")
+          print("PATCHED", p, "bytes=", p.stat().st_size)
+          PY
+          php -l /tmp/pumpbot/pumpbot/app/engine.php
+          mkdir -p patch/pumpbot/app
+          cp /tmp/pumpbot/pumpbot/app/engine.php patch/pumpbot/app/engine.php
+          cat > patch/README_PATCH_FA.txt <<'EOF'
+          پچ اصلاح واحد ریال/تومان + گزارش تلگرام هر دور تحلیل
+          
+          نصب:
+          1) از فایل public_html/pumpbot/app/engine.php یک نسخه پشتیبان بگیر.
+          2) فایل pumpbot/app/engine.php داخل این ZIP را در ریشه نصب ربات Extract و فایل قبلی را Replace کن.
+          3) Cron Job فعلی هر یک دقیقه باقی بماند.
+          4) در پنل ربات > تنظیمات، Telegram Bot Token و Telegram Chat ID را ذخیره کن.
+          
+          تغییرات:
+          - نرخ ask/bid/last دریافتی از اردربوک USDTIRT نوبیتکس از ریال به تومان تبدیل می‌شود.
+          - اگر حساب کاغذی قبلی با نرخ ریالی به‌عنوان تومان شروع شده باشد، state/trades/decisions/daily قبلی با پسوند pre_toman_fix آرشیو می‌شود و حساب آزمایشی جدید با سرمایه تنظیم‌شده (۳,۰۰۰,۰۰۰ تومان) ساخته می‌شود.
+          - پس از هر اجرای موفق کران، گزارش تلگرام شامل تعداد توکن‌ها، خریدها، فروش‌ها، دلایل نمونه عدم ورود، موجودی و سود/زیان ارسال می‌شود.
+          - اعلان‌های جداگانه خرید/فروش و گزارش روزانه قبلی حفظ شده‌اند.
+          
+          نکته: این تغییر فقط موتور Paper Trading را اصلاح می‌کند؛ معامله واقعی انجام نمی‌دهد.
+          EOF
+          cd patch
+          zip -qr ../Developersia-PumpHunter-Currency-Telegram-Patch-v1.0.1.zip .
+      - name: Upload patch archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: Developersia-PumpHunter-Currency-Telegram-Patch-v1.0.1
+          path: Developersia-PumpHunter-Currency-Telegram-Patch-v1.0.1.zip
+          if-no-files-found: error
+          retention-days: 14
